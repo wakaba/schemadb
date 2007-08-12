@@ -147,36 +147,107 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
       my %keys = map {$_ => 1} keys %$prop;
 
       print qq[<dl>];
-      print qq[<dt lang="en">URI</dt>];
-      for my $v (@{$prop->{uri}}) {
-        my $uri = $v->[0];
-        my $etime = '';
-        if ($uri =~ s/<>(.*)$//s) {
-          $etime = htescape ($1);
-        }
-        my $euri = htescape ($uri);
-        my $elang = htescape ($v->[1]);
-        print qq[<dd><code class=uri lang="$elang">&lt;<a href="$euri">$euri</a>&gt;</code>];
 
-        my $uri2 = $dom->create_uri_reference (q<../uri.html>);
-        $uri2->uri_query ($uri);
-        print qq[ [<a href="@{[htescape ($uri2->uri_reference)]}" lang="en">more</a>]];
-
-        if (length $etime) {
-          print qq[ (<time>$etime</time>)];
-        }
-        print qq[</dd>];
-      }
-      delete $keys{uri};
-
-      if (keys %keys) {
-        for my $key (sort {$a cmp $b} keys %keys) {
-          next unless @{$prop->{$key}};
-          print qq[<dt>], htescape ($key), qq[</dt>];
-          for (@{$prop->{$key}}) {
-            print qq[<dd lang="@{[htescape ($_->[1])]}">],
-                htescape ($_->[0]), qq[</dd>\n];
+      if ($prop->{uri}->[0]) {
+        print qq[<dt lang="en">URI</dt>];
+        for my $v (@{$prop->{uri}}) {
+          my $uri = $v->[0];
+          my $etime = '';
+          if ($uri =~ s/<>(.*)$//s) {
+            $etime = htescape ($1);
           }
+          my $euri = htescape ($uri);
+          my $elang = htescape ($v->[1]);
+          print qq[<dd><code class=uri lang="$elang">&lt;<a href="$euri">$euri</a>&gt;</code>];
+          
+          my $uri2 = $dom->create_uri_reference (q<../list/uri.html>);
+          $uri2->uri_query ($uri);
+          print qq[ [<a href="@{[htescape ($uri2->get_uri_reference->uri_reference)]}" lang="en">more</a>]];
+          
+          if (length $etime) {
+            print qq[ (<time>$etime</time>)];
+          }
+          print qq[</dd>];
+        }
+        delete $keys{uri};
+      }
+
+      if ($prop->{public_id}) {
+        print qq[<dt lang="en">Public Identifier</dt>];
+        for my $v (@{$prop->{public_id}}) {
+          my $uri = $dom->create_uri_reference (q<../list/pubid.html>);
+          $uri->uri_query ($v->[0]);
+          my $elang = htescape ($v->[1]);
+          print qq[<dd><a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}"><code lang="@{[htescape ($v->[1])]}" class=public-id>@{[htescape ($v->[0])]}</code></a></dd>];
+        }
+        delete $keys{public_id};
+      }
+
+      if ($prop->{system_id}->[0]) {
+        print qq[<dt lang="en">System Identifier</dt>];
+        for my $v (@{$prop->{system_id}}) {
+          my $uri = $v->[0];
+          my $euri = htescape ($uri);
+          my $elang = htescape ($v->[1]);
+          print qq[<dd><code class=uri lang="$elang">&lt;<a href="$euri">$euri</a>&gt;</code>];
+          
+          my $uri2 = $dom->create_uri_reference (q<../list/uri.html>);
+          $uri2->uri_query ($uri);
+          print qq[ [<a href="@{[htescape ($uri2->get_uri_reference->uri_reference)]}" lang="en">more</a>]];
+          
+          print qq[</dd>];
+        }
+        delete $keys{system_id};
+      }
+
+      for ([editor => 'Editor'], [author => 'Author']) {
+        my $key = $_->[0];
+        my $label = $_->[1];
+        if ($prop->{$key}) {
+          print qq[<dt lang="en">$label</dt>];
+          for my $v (@{$prop->{$key}}) {
+            my $uri = $dom->create_uri_reference (q<../list/editor.html>);
+            $uri->uri_query ($v->[0]);
+            my $elang = htescape ($v->[1]);
+            print qq[<dd><a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}" lang="@{[htescape ($v->[1])]}">@{[htescape ($v->[0])]}</a></dd>];
+          }
+          delete $keys{$key};
+        }
+      }
+
+      if ($prop->{ref}->[0]) {
+        print qq[<dt>Reference</dt>];
+        for (@{$prop->{ref}}) {
+          my $v = $_->[0];
+          print qq[<dd><dl>];
+          for (split /\s*;\s*/, $v) {
+            my ($n, $v) = split /\s*:\s*/, $_, 2;
+            if ($n eq 'public_id') {
+              print qq[<dt>Public Identifier</dt><dd>];
+              my $uri = $dom->create_uri_reference (q<../list/pubid.html>);
+              $uri->uri_query ($v);
+              print qq[<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}"><code>@{[htescape ($v)]}</code></a></dd>];
+            } elsif ($n eq 'system_id') {
+              print qq[<dt>System Identifier</dt><dd>];
+              my $uri = $dom->create_uri_reference (q<../list/uri.html>);
+              $uri->uri_query ($v);
+              print qq[<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}"><code>@{[htescape ($v)]}</code></a></dd>];
+            } else {
+              print qq[<dt>], htescape ($n), qq[</dt><dd>];
+              print htescape ($v), qq[</dd>];
+            }
+          }
+          print qq[</dl></dd>];
+        }
+        delete $keys{ref};
+      }
+
+      for my $key (sort {$a cmp $b} keys %keys) {
+        next unless @{$prop->{$key}};
+        print qq[<dt>], htescape ($key), qq[</dt>];
+        for (@{$prop->{$key}}) {
+          print qq[<dd lang="@{[htescape ($_->[1])]}">],
+              htescape ($_->[0]), qq[</dd>\n];
         }
       }
       
@@ -248,113 +319,23 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
     print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
     exit;
   }
-} elsif (@path == 2 and $path[0] eq '' and $path[1] eq 'list.html') {
-  print "Content-Type: text/html; charset=utf-8\n";
-  binmode STDOUT, ':utf8';
-  print "\n";
-  print qq[<!DOCTYPE HTML>
-<html lang=en>
-<head>
-<title>List of URIs in the HTML Schema Database</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
-</head>
-<body>
-<h1>List of URIs in the HTML Schema Database</h1>
-<ul>];
-
-  my $uri_list = get_map ('uri_to_entity');
-  for (sort {$a cmp $b} keys %$uri_list) {
-    my $euri = htescape ($_);
-    my $uri2 = $dom->create_uri_reference (q<uri.html>);
-    $uri2->uri_query ($_);
-    my $euri2 = htescape ($uri2);
-    print qq[<li><code class=uri lang=en>&lt;<a href="$euri2">$euri</a>&gt;</code></li>];
-  }
-  print qq[</ul>], get_html_navigation ('../', undef);
-  print qq[</body></html>];
-  exit;
-} elsif (@path == 3 and $path[0] eq '' and $path[1] eq 'list' and
-    $path[2] eq 'pubid.html') {
-  my $query = $cgi->query_string;
-
-  if (defined $query and length $query) {
-    print "Content-Type: text/html; charset=utf-8\n";
-    binmode STDOUT, ':utf8';
-    print "\n";
+} elsif (@path == 3 and $path[0] eq '' and $path[1] eq 'list') {
+  if ($path[2] eq 'uri.html') {
+      print "Content-Type: text/html; charset=utf-8\n";
+    my $query = $cgi->query_string;
     
-    $query = '?' . $query;
-    my $turi = $dom->create_uri_reference ($query)
-        ->get_iri_reference
-        ->uri_query;
-    $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
-    my $eturi = htescape ($turi);
-    
-    print qq[<!DOCTYPE HTML>
-<html lang=en>
-<head>
-<title>Entries Associated with "$eturi"</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
-</head>
-<body>
-<h1>Entries Associated with <code>$eturi</code></h1>
-<ul>];
-
-    my $uri_to_entity = get_map ('pubid_to_entity')->{$turi};
-    for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
-      my $edigest = htescape ($digest);
-      my $uri2 = $dom->create_uri_reference
-          (q<../> . $digest . q</prop.html>);
-      my $euri2 = htescape ($uri2);
-      print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
-    }
-    print qq[</ul>], get_html_navigation ('../', undef);
-    print qq[</body></html>];
-    exit;
-  } else {
-    print "Content-Type: text/html; charset=utf-8\n";
-    binmode STDOUT, ':utf8';
-    print "\n";
-    print qq[<!DOCTYPE HTML>
-<html lang=en>
-<head>
-<title>List of Public Identifiers in the HTML Schema Database</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
-</head>
-<body>
-<h1>List of Public Identifiers in the HTML Schema Database</h1>
-<ul>];
-
-    my $uri_list = get_map ('pubid_to_entity');
-    for (sort {$a cmp $b} keys %$uri_list) {
-      my $euri = htescape ($_);
-      my $uri2 = $dom->create_uri_reference
-          (q<pubid.html>);
-      $uri2->uri_query ($_);
-      my $euri2 = htescape ($uri2);
-      print qq[<li><a href="$euri2"><code lang=en class=public-id>$euri</code></a></li>];
-    }
-    print qq[</ul>], get_html_navigation ('../', undef);
-    print qq[</body></html>];
-    exit;
-  }
-} elsif (@path == 2 and $path[0] eq '' and $path[1] eq 'uri.html') {
-  print "Content-Type: text/html; charset=utf-8\n";
-  binmode STDOUT, ':utf8';
-  print "\n";
-
-  my $query = $cgi->query_string;
-  if (defined $query) {
-    $query = '?' . $query;
-  } else {
-    $query = '';
-  }
-  my $turi = $dom->create_uri_reference ($query)
-      ->get_iri_reference
-      ->uri_query;
-  $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
-  my $eturi = htescape ($turi);
-
-  print qq[<!DOCTYPE HTML>
+    if (defined $query and length $query) {
+      binmode STDOUT, ':utf8';
+      print "\n";
+      
+      $query = '?' . $query;
+      my $turi = $dom->create_uri_reference ($query)
+          ->get_iri_reference
+          ->uri_query;
+      $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
+      my $eturi = htescape ($turi);
+      
+      print qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title>Entries Associated with &lt;$eturi&gt;</title>
@@ -364,18 +345,170 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
 <h1>Entries Associated with <code>&lt;$eturi&gt;</code></h1>
 <ul>];
 
-  my $uri_to_entity = get_map ('uri_to_entity')->{$turi};
-  for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
-    my $edigest = htescape ($digest);
-    my $uri2 = $dom->create_uri_reference
-        ($digest . q</prop.html>);
-    my $euri2 = htescape ($uri2);
-    print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
+      my $uri_to_entity = get_map ('uri_to_entity')->{$turi};
+      for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
+        my $edigest = htescape ($digest);
+        my $uri2 = $dom->create_uri_reference
+          (q<../> . $digest . q</prop.html>);
+        my $euri2 = htescape ($uri2);
+        print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
+      }
+      print qq[</ul>];
+      print '', get_html_navigation ('../', undef);
+      print qq[</body></html>];
+      exit;
+    } else {
+      print "Content-Type: text/html; charset=utf-8\n";
+      binmode STDOUT, ':utf8';
+      print "\n";
+      print qq[<!DOCTYPE HTML>
+<html lang=en>
+<head>
+<title>List of URIs in the HTML Schema Database</title>
+<link rel=stylesheet href="/www/style/html/xhtml">
+</head>
+<body>
+<h1>List of URIs in the HTML Schema Database</h1>
+<ul>];
+
+      my $uri_list = get_map ('uri_to_entity');
+      for (sort {$a cmp $b} keys %$uri_list) {
+        my $euri = htescape ($_);
+        my $uri2 = $dom->create_uri_reference (q<uri.html>);
+        $uri2->uri_query ($_);
+        my $euri2 = htescape ($uri2);
+        print qq[<li><code class=uri lang=en>&lt;<a href="$euri2">$euri</a>&gt;</code></li>];
+      }
+      print qq[</ul>], get_html_navigation ('../', undef);
+      print qq[</body></html>];
+      exit;
+    }
+  } elsif ($path[2] eq 'pubid.html') {
+    my $query = $cgi->query_string;
+    
+    if (defined $query and length $query) {
+      print "Content-Type: text/html; charset=utf-8\n";
+      binmode STDOUT, ':utf8';
+      print "\n";
+      
+      $query = '?' . $query;
+      my $turi = $dom->create_uri_reference ($query)
+          ->get_iri_reference
+          ->uri_query;
+      $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
+      my $eturi = htescape ($turi);
+      
+      print qq[<!DOCTYPE HTML>
+<html lang=en>
+<head>
+<title>Entries Associated with "$eturi"</title>
+<link rel=stylesheet href="/www/style/html/xhtml">
+</head>
+<body>
+<h1>Entries Associated with <code>$eturi</code></h1>
+<ul>];
+
+      my $uri_to_entity = get_map ('pubid_to_entity')->{$turi};
+      for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
+        my $edigest = htescape ($digest);
+        my $uri2 = $dom->create_uri_reference
+            (q<../> . $digest . q</prop.html>);
+        my $euri2 = htescape ($uri2);
+        print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
+      }
+      print qq[</ul>], get_html_navigation ('../', undef);
+      print qq[</body></html>];
+      exit;
+    } else {
+      print "Content-Type: text/html; charset=utf-8\n";
+      binmode STDOUT, ':utf8';
+      print "\n";
+      print qq[<!DOCTYPE HTML>
+<html lang=en>
+<head>
+<title>List of Public Identifiers in the HTML Schema Database</title>
+<link rel=stylesheet href="/www/style/html/xhtml">
+</head>
+<body>
+<h1>List of Public Identifiers in the HTML Schema Database</h1>
+<ul>];
+
+      my $uri_list = get_map ('pubid_to_entity');
+      for (sort {$a cmp $b} keys %$uri_list) {
+        my $euri = htescape ($_);
+        my $uri2 = $dom->create_uri_reference
+            (q<pubid.html>);
+        $uri2->uri_query ($_);
+        my $euri2 = htescape ($uri2);
+        print qq[<li><a href="$euri2"><code lang=en class=public-id>$euri</code></a></li>];
+      }
+      print qq[</ul>], get_html_navigation ('../', undef);
+      print qq[</body></html>];
+      exit;
+    }
+  } elsif ($path[2] eq 'editor.html') {
+    my $query = $cgi->query_string;
+    
+    if (defined $query and length $query) {
+      print "Content-Type: text/html; charset=utf-8\n";
+      binmode STDOUT, ':utf8';
+      print "\n";
+      
+      $query = '?' . $query;
+      my $turi = $dom->create_uri_reference ($query)
+          ->get_iri_reference
+          ->uri_query;
+      $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
+      my $eturi = htescape ($turi);
+      
+      print qq[<!DOCTYPE HTML>
+<html lang=en>
+<head>
+<title>Entries Associated with $eturi</title>
+<link rel=stylesheet href="/www/style/html/xhtml">
+</head>
+<body>
+<h1>Entries Associated with $eturi</h1>
+<ul>];
+
+      my $uri_to_entity = get_map ('editor_to_entity')->{$turi};
+      for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
+        my $edigest = htescape ($digest);
+        my $uri2 = $dom->create_uri_reference
+            (q<../> . $digest . q</prop.html>);
+        my $euri2 = htescape ($uri2);
+        print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
+      }
+      print qq[</ul>], get_html_navigation ('../', undef);
+      print qq[</body></html>];
+      exit;
+    } else {
+      print "Content-Type: text/html; charset=utf-8\n";
+      binmode STDOUT, ':utf8';
+      print "\n";
+      print qq[<!DOCTYPE HTML>
+<html lang=en>
+<head>
+<title>List of Editors/Authors</title>
+<link rel=stylesheet href="/www/style/html/xhtml">
+</head>
+<body>
+<h1>List of Editors/Authors</h1>
+<ul>];
+
+      my $uri_list = get_map ('editor_to_entity');
+      for (sort {$a cmp $b} keys %$uri_list) {
+        my $euri = htescape ($_);
+        my $uri2 = $dom->create_uri_reference (q<editor.html>);
+        $uri2->uri_query ($_);
+        my $euri2 = htescape ($uri2);
+        print qq[<li><a href="$euri2">$euri</a></li>];
+      }
+      print qq[</ul>], get_html_navigation ('../', undef);
+      print qq[</body></html>];
+      exit;
+    }
   }
-  print qq[</ul>];
-  print '', get_html_navigation ('', undef);
-  print qq[</body></html>];
-  exit;
 }
 
 print "Status: 404 Not Found\nContent-Type: text/plain\n\n404";
@@ -556,6 +689,16 @@ sub update_maps ($$) {
     $pubid_to_entity->{$pubid}->{$digest} = 1;
   }
   set_map (pubid_to_entity => $pubid_to_entity);
+
+  my $editor_to_entity = get_map ('editor_to_entity');
+  for (map {$_->[0]} @{$prop->{editor}}, @{$prop->{author}}) {
+    my $name = $_;
+    $name =~ s/\s+/ /g;
+    $name =~ s/^ //;
+    $name =~ s/ $//;
+    $editor_to_entity->{$name}->{$digest} = 1;
+  }
+  set_map (editor_to_entity => $editor_to_entity);
 } # update_maps
 
 sub time_to_rfc3339 ($) {

@@ -1,5 +1,14 @@
 2007-08-12  Wakaba  <wakaba@suika.fam.cx>
 
+	* schema.cgi: Public and system identifiers and references
+	are now supported in property view.
+	List of URIs are now list/uri.html, no longer list.html.
+	Likewise, list of entries for a URI is list/uri.html?,
+	no longer uri.html?.
+	Person list is added.
+
+2007-08-12  Wakaba  <wakaba@suika.fam.cx>
+
 	* schema.cgi, schema-add.en.html, prop-edit.en.html: Navigation
 	links are updated.
 
