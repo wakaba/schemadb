@@ -11,7 +11,10 @@ my $map_directory = $data_directory;
 my $DEBUG = 1;
 
 use Encode;
+
 use Message::URI::URIReference;
+my $dom = 'Message::DOM::DOMImplementation';
+
 use Message::CGI::HTTP;
 my $cgi = Message::CGI::HTTP->new;
 
@@ -46,7 +49,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
       my $uri = $prop->{base_uri}->[0] ? $prop->{base_uri}->[0]->[0] : '';
       if (length $uri) {
         print q[Content-Location: ];
-        print Message::DOM::DOMImplementation->create_uri_reference ($uri)
+        print $dom->create_uri_reference ($uri)
             ->get_uri_reference->uri_reference;
         print "\n";
       }
@@ -165,8 +168,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
         my $elang = htescape ($v->[1]);
         print qq[<dd><code class=uri lang="$elang">&lt;<a href="$euri">$euri</a>&gt;</code>];
 
-        my $uri2 = Message::DOM::DOMImplementation->create_uri_reference
-            (q<../uri.html>);
+        my $uri2 = $dom->create_uri_reference (q<../uri.html>);
         $uri2->uri_query ($uri);
         print qq[ [<a href="@{[htescape ($uri2->uri_reference)]}" lang="en">more</a>]];
 
@@ -240,8 +242,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
 
         print "Status: 201 Created\n";
         print "Content-Type: text/html; charset=iso-8859-1\n";
-        my $uri = Message::DOM::DOMImplementation->create_uri_reference
-            ($digest . q</prop.html>)
+        my $uri = $dom->create_uri_reference ($digest . q</prop.html>)
             ->get_absolute_reference ($cgi->request_uri)
             ->get_uri_reference
             ->uri_reference;
@@ -286,8 +287,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
   my $uri_list = get_map ('uri_to_entity');
   for (sort {$a cmp $b} keys %$uri_list) {
     my $euri = htescape ($_);
-    my $uri2 = Message::DOM::DOMImplementation->create_uri_reference
-        (q<uri.html>);
+    my $uri2 = $dom->create_uri_reference (q<uri.html>);
     $uri2->uri_query ($_);
     my $euri2 = htescape ($uri2);
     print qq[<li><code class=uri lang=en>&lt;<a href="$euri2">$euri</a>&gt;</code></li>];
@@ -310,7 +310,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
     print "\n";
     
     $query = '?' . $query;
-    my $turi = Message::DOM::DOMImplementation->create_uri_reference ($query)
+    my $turi = $dom->create_uri_reference ($query)
         ->get_iri_reference
         ->uri_query;
     $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
@@ -329,7 +329,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
     my $uri_to_entity = get_map ('pubid_to_entity')->{$turi};
     for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
       my $edigest = htescape ($digest);
-      my $uri2 = Message::DOM::DOMImplementation->create_uri_reference
+      my $uri2 = $dom->create_uri_reference
           (q<../> . $digest . q</prop.html>);
       my $euri2 = htescape ($uri2);
       print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
@@ -359,7 +359,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
     my $uri_list = get_map ('pubid_to_entity');
     for (sort {$a cmp $b} keys %$uri_list) {
       my $euri = htescape ($_);
-      my $uri2 = Message::DOM::DOMImplementation->create_uri_reference
+      my $uri2 = $dom->create_uri_reference
           (q<pubid.html>);
       $uri2->uri_query ($_);
       my $euri2 = htescape ($uri2);
@@ -385,7 +385,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
   } else {
     $query = '';
   }
-  my $turi = Message::DOM::DOMImplementation->create_uri_reference ($query)
+  my $turi = $dom->create_uri_reference ($query)
       ->get_iri_reference
       ->uri_query;
   $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
@@ -404,7 +404,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
   my $uri_to_entity = get_map ('uri_to_entity')->{$turi};
   for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
     my $edigest = htescape ($digest);
-    my $uri2 = Message::DOM::DOMImplementation->create_uri_reference
+    my $uri2 = $dom->create_uri_reference
         ($digest . q</prop.html>);
     my $euri2 = htescape ($uri2);
     print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
@@ -423,7 +423,7 @@ print "Status: 404 Not Found\nContent-Type: text/plain\n\n404";
 exit;
 
 sub percent_decode ($) {
-  return Message::DOM::DOMImplementation->create_uri_reference ($_[0])
+  return $dom->create_uri_reference ($_[0])
       ->get_iri_reference
       ->uri_reference;
 } # percent_decode
@@ -639,8 +639,7 @@ sub get_remote_entity ($) {
   my $request_uri = $_[0];
   my $r = {};
 
-    my $uri = Message::DOM::DOMImplementation->create_uri_reference
-        ($request_uri);
+    my $uri = $dom->create_uri_reference ($request_uri);
     unless ({
              http => 1,
             }->{lc $uri->uri_scheme}) {
@@ -678,7 +677,7 @@ EOH
 
     require LWP::UserAgent;
     my $ua = WDCC::LWPUA->new;
-    $ua->{wdcc_dom} = 'Message::DOM::DOMImplementation';
+    $ua->{wdcc_dom} = $dom;
     $ua->{wdcc_host_permit} = $host_permit;
     $ua->agent ('Mozilla'); ## TODO: for now.
     $ua->parse_head (0);

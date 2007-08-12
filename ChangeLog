@@ -1,5 +1,9 @@
 2007-08-12  Wakaba  <wakaba@suika.fam.cx>
 
+	* schema.cgi: DOM package name is replaced by a variable.
+
+2007-08-12  Wakaba  <wakaba@suika.fam.cx>
+
 	* schema.cgi: New file.
 
 	* prop-edit.en.html: New file.
