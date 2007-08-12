@@ -66,8 +66,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
   } elsif ($path[2] eq 'cache.html') {
     my $file_text = get_file_text ($path[1]);
     if (defined $file_text) {
-      my $prop = get_prop_hash ($path[1]);
-      my ($title_text, $title_lang) = get_title_prop_text ($prop);
+      my ($title_text, $title_lang) = get_title ($path[1]);
       $title_text = htescape ($title_text);
       $title_lang = htescape ($title_lang);
 
@@ -130,7 +129,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
       print "Content-Type: text/html; charset=utf-8\n\n";
       binmode STDOUT, ':utf8';
 
-      my ($title_text, $title_lang) = get_title_prop_text ($prop);
+      my ($title_text, $title_lang) = get_title ($path[1]);
       $title_text = htescape ($title_text);
       $title_lang = htescape ($title_lang);
 
@@ -172,7 +171,7 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
         delete $keys{uri};
       }
 
-      if ($prop->{public_id}) {
+      if ($prop->{public_id}->[0]) {
         print qq[<dt lang="en">Public Identifier</dt>];
         for my $v (@{$prop->{public_id}}) {
           my $uri = $dom->create_uri_reference (q<../list/pubid.html>);
@@ -200,7 +199,9 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
         delete $keys{system_id};
       }
 
-      for ([editor => 'Editor'], [author => 'Author']) {
+      for ([editor => 'Editor'], [editor_mail => 'Editor (mail)'],
+           [rcs_user => 'Editor (RCS)'],
+           [author => 'Author'], [author_mail => 'Author (mail)']) {
         my $key = $_->[0];
         my $label = $_->[1];
         if ($prop->{$key}) {
@@ -222,19 +223,29 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
           print qq[<dd><dl>];
           for (split /\s*;\s*/, $v) {
             my ($n, $v) = split /\s*:\s*/, $_, 2;
+            my $l = '';
+            if ($n =~ s/\@([^@]+)//) {
+              $l = $1;
+            }
             if ($n eq 'public_id') {
               print qq[<dt>Public Identifier</dt><dd>];
               my $uri = $dom->create_uri_reference (q<../list/pubid.html>);
               $uri->uri_query ($v);
-              print qq[<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}"><code>@{[htescape ($v)]}</code></a></dd>];
+              print qq[<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}"><code class=public-id lang="@{[htescape ($l)]}">@{[htescape ($v)]}</code></a></dd>];
             } elsif ($n eq 'system_id') {
               print qq[<dt>System Identifier</dt><dd>];
+              my $v_uri = $dom->create_uri_reference ($v);
+              if (defined $prop->{base_uri}->[0]) {
+                $v_uri = $v_uri->get_absolute_reference
+                    ($prop->{base_uri}->[0]->[0]);
+              }
               my $uri = $dom->create_uri_reference (q<../list/uri.html>);
-              $uri->uri_query ($v);
-              print qq[<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}"><code>@{[htescape ($v)]}</code></a></dd>];
+              $uri->uri_query ($v_uri->uri_reference);
+              print qq[<code class=uri lang="@{[htescape ($l)]}">&lt;<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}">@{[htescape ($v)]}</a>&gt;</code></dd>];
             } else {
-              print qq[<dt>], htescape ($n), qq[</dt><dd>];
-              print htescape ($v), qq[</dd>];
+              print qq[<dt>], htescape ($n), qq[</dt>];
+              print qq[<dd lang="@{[htescape ($l)]}">], htescape ($v);
+              print qq[</dd>];
             }
           }
           print qq[</dl></dd>];
@@ -347,11 +358,11 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
 
       my $uri_to_entity = get_map ('uri_to_entity')->{$turi};
       for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
-        my $edigest = htescape ($digest);
         my $uri2 = $dom->create_uri_reference
           (q<../> . $digest . q</prop.html>);
         my $euri2 = htescape ($uri2);
-        print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
+        my ($title_text, $title_lang) = get_title ($digest);
+        print qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>];
       }
       print qq[</ul>];
       print '', get_html_navigation ('../', undef);
@@ -364,11 +375,11 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
       print qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
-<title>List of URIs in the HTML Schema Database</title>
+<title>List of URIs</title>
 <link rel=stylesheet href="/www/style/html/xhtml">
 </head>
 <body>
-<h1>List of URIs in the HTML Schema Database</h1>
+<h1>List of URIs</h1>
 <ul>];
 
       my $uri_list = get_map ('uri_to_entity');
@@ -410,11 +421,11 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
 
       my $uri_to_entity = get_map ('pubid_to_entity')->{$turi};
       for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
-        my $edigest = htescape ($digest);
         my $uri2 = $dom->create_uri_reference
             (q<../> . $digest . q</prop.html>);
         my $euri2 = htescape ($uri2);
-        print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
+        my ($title_text, $title_lang) = get_title ($digest);
+        print qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>];
       }
       print qq[</ul>], get_html_navigation ('../', undef);
       print qq[</body></html>];
@@ -426,11 +437,11 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
       print qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
-<title>List of Public Identifiers in the HTML Schema Database</title>
+<title>List of Public Identifiers</title>
 <link rel=stylesheet href="/www/style/html/xhtml">
 </head>
 <body>
-<h1>List of Public Identifiers in the HTML Schema Database</h1>
+<h1>List of Public Identifiers</h1>
 <ul>];
 
       my $uri_list = get_map ('pubid_to_entity');
@@ -473,11 +484,11 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
 
       my $uri_to_entity = get_map ('editor_to_entity')->{$turi};
       for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
-        my $edigest = htescape ($digest);
         my $uri2 = $dom->create_uri_reference
             (q<../> . $digest . q</prop.html>);
         my $euri2 = htescape ($uri2);
-        print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
+        my ($title_text, $title_lang) = get_title ($digest);
+        print qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>];
       }
       print qq[</ul>], get_html_navigation ('../', undef);
       print qq[</body></html>];
@@ -621,9 +632,22 @@ sub set_prop_hash ($$) {
   return set_prop_text ($_[0] => $r, new_file => 1);
 } # set_prop_hash
 
+sub get_title ($) {
+  my $digest = shift;
+  my $digest_to_title = get_map ('digest_to_title');
+  my $v = $digest_to_title->{$digest};
+  if (defined $v) {
+    return @$v;
+  } else {
+    return ($digest, '');
+  }
+} # get_title
+
 sub get_title_prop_text ($) {
   my $prop = shift;
-  if ($prop->{title}->[0]) {
+  if ($prop->{label}->[0]) {
+    return @{$prop->{label}->[0]};
+  } elsif ($prop->{title}->[0]) {
     return @{$prop->{title}->[0]};
   } elsif ($prop->{file_name}->[0]) {
     return @{$prop->{file_name}->[0]};
@@ -691,7 +715,11 @@ sub update_maps ($$) {
   set_map (pubid_to_entity => $pubid_to_entity);
 
   my $editor_to_entity = get_map ('editor_to_entity');
-  for (map {$_->[0]} @{$prop->{editor}}, @{$prop->{author}}) {
+  for (map {$_->[0]} @{$prop->{editor}},
+       @{$prop->{editor_mail}},
+       @{$prop->{rcs_user}},
+       @{$prop->{author}},
+       @{$prop->{author_mail}}) {
     my $name = $_;
     $name =~ s/\s+/ /g;
     $name =~ s/^ //;
@@ -699,6 +727,14 @@ sub update_maps ($$) {
     $editor_to_entity->{$name}->{$digest} = 1;
   }
   set_map (editor_to_entity => $editor_to_entity);
+
+  my ($title_text, $title_lang) = get_title_prop_text ($prop);
+  if ($title_text eq '' and $title_lang eq '') {
+    $title_text = $digest;
+  }
+  my $digest_to_title = get_map ('digest_to_title');
+  $digest_to_title->{$digest} = [$title_text, $title_lang];
+  set_map (digest_to_title => $digest_to_title);
 } # update_maps
 
 sub time_to_rfc3339 ($) {
