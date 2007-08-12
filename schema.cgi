@@ -100,18 +100,8 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
       for (split /\x0D?\x0A/, $file_text) {
         print qq[<span class=line>], htescape ($_), qq[</span>\n];
       }
-      print qq[</code></pre>
-
-<div class=navigation>
-[<a href="../list.html">List</a>]
-[<a href="../../schema-add">Add</a>]
-[<a href="prop.html">Information</a>
-<a href="propedit.html">Edit Information</a>]
-[<a href="cache.dat">Cache (as is)</a>
-<a>Cache (annotated)</a>]
-</div>
-</body>
-</html>];
+      print qq[</code></pre>], get_html_navigation ('../', $path[1]);
+      print qq[</body></html>];
       exit;      
     }    
   } elsif ($path[2] eq 'prop.txt') {
@@ -190,20 +180,8 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
         }
       }
       
-      print qq[</dl>];
-      print qq[
-
-<div class=navigation lang=en>
-[<a href="../list.html">List</a>]
-[<a href="../../schema-add">Add</a>]
-[<a>Information</a>
-<a href="propedit.html">Edit Information</a>]
-[<a href="cache.dat">Cache (as is)</a>
-<a href="cache.html">Cache (annotated)</a>]
-</div>
-
-</body>
-</html>];
+      print qq[</dl>], get_html_navigation ('../', $path[1]);
+      print qq[</body></html>];
       exit;
     }
   } elsif ($path[2] eq 'propedit.html') {
@@ -292,19 +270,14 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
     my $euri2 = htescape ($uri2);
     print qq[<li><code class=uri lang=en>&lt;<a href="$euri2">$euri</a>&gt;</code></li>];
   }
-  print qq[</ul>
-
-<div class=navigation lang=en>
-[<a>List</a>]
-[<a href="../schema-add">Add</a>]
-</div>
-</body></html>];
+  print qq[</ul>], get_html_navigation ('../', undef);
+  print qq[</body></html>];
   exit;
 } elsif (@path == 3 and $path[0] eq '' and $path[1] eq 'list' and
     $path[2] eq 'pubid.html') {
   my $query = $cgi->query_string;
 
-  if (defined $query) {
+  if (defined $query and length $query) {
     print "Content-Type: text/html; charset=utf-8\n";
     binmode STDOUT, ':utf8';
     print "\n";
@@ -334,13 +307,8 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
       my $euri2 = htescape ($uri2);
       print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
     }
-    print qq[</ul>
-             
-<div class=navigation lang=en>
-[<a href="list.html">List</a>]
-[<a href="../schema-add">Add</a>]
-</div>
-</body></html>];
+    print qq[</ul>], get_html_navigation ('../', undef);
+    print qq[</body></html>];
     exit;
   } else {
     print "Content-Type: text/html; charset=utf-8\n";
@@ -365,13 +333,8 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
       my $euri2 = htescape ($uri2);
       print qq[<li><a href="$euri2"><code lang=en class=public-id>$euri</code></a></li>];
     }
-    print qq[</ul>
-
-<div class=navigation lang=en>
-[<a>List</a>]
-[<a href="../schema-add">Add</a>]
-</div>
-</body></html>];
+    print qq[</ul>], get_html_navigation ('../', undef);
+    print qq[</body></html>];
     exit;
   }
 } elsif (@path == 2 and $path[0] eq '' and $path[1] eq 'uri.html') {
@@ -409,13 +372,9 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
     my $euri2 = htescape ($uri2);
     print qq[<li><a href="$euri2"><code lang="">$edigest</code></a></li>];
   }
-  print qq[</ul>
-
-<div class=navigation lang=en>
-[<a href="list.html">List</a>]
-[<a href="../schema-add">Add</a>]
-</div>
-</body></html>];
+  print qq[</ul>];
+  print '', get_html_navigation ('', undef);
+  print qq[</body></html>];
   exit;
 }
 
@@ -634,6 +593,28 @@ sub rfc3339_to_http ($) {
     return '';
   }
 } # rfc3339_to_http
+
+sub get_html_navigation ($$) {
+  my ($goto_base, $digest) = @_;
+  my $r = qq[<div class=navigation>
+[List files by <a href="${goto_base}list/uri.html">URI</a>,
+<a href="${goto_base}list/pubid.html">Public ID</a>,
+<a href="${goto_base}list/editor.html">Editor</a>]
+[<a href="${goto_base}../schema-add">Add file</a>]
+];
+  if (defined $digest) {
+    $r .= qq[
+[<a href="${goto_base}$digest/prop.html">Information</a>
+(<a href="${goto_base}$digest/propedit.html">Edit</a>)]
+[Cache (<a href="${goto_base}$digest/cache.html">annotated</a>, 
+<a href="${goto_base}$digest/cache.dat">original</a>)]
+];
+  }
+
+  $r .= qq[</div>];
+
+  return $r;
+} # get_html_navigation
 
 sub get_remote_entity ($) {
   my $request_uri = $_[0];

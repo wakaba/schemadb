@@ -1,5 +1,10 @@
 2007-08-12  Wakaba  <wakaba@suika.fam.cx>
 
+	* schema.cgi, schema-add.en.html, prop-edit.en.html: Navigation
+	links are updated.
+
+2007-08-12  Wakaba  <wakaba@suika.fam.cx>
+
 	* schema.cgi: DOM package name is replaced by a variable.
 
 2007-08-12  Wakaba  <wakaba@suika.fam.cx>
