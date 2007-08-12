@@ -1,0 +1,82 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+<title>Edit properties</title>
+<link rel=stylesheet href="/www/style/html/xhtml">
+<style>
+  textarea {
+    height: 20em;
+  }
+
+  p ~ p {
+    float: left;
+  }
+</style>
+</head>
+<body>
+<h1>Edit properties</h1>
+
+<p><textarea id="editarea"></textarea></p>
+
+<p><button type=button onclick="
+  var req = new XMLHttpRequest ();
+  req.open ('PUT', getPropURI (), true);
+  req.setRequestHeader ('Content-Type', 'text/plain; charset=utf-8');
+  req.onreadystatechange = function (ev) {
+    if (req.readyState == 4) {
+      if (req.status >= 200 && req.status < 400) {
+        setStatus ('info',
+                   'Saved (' + req.status + ' ' + req.statusText + ')');
+      } else {
+        setStatus ('error',
+                   'Can\'t save (' + req.status + ' ' + req.statusText + ')');
+      }
+    }
+  };
+  req.send ($('editarea').value);
+">Save</button></p>
+
+<p class=error id="status">Scripting is disabled.</p>
+
+<div class=navigation>
+[<a href="../list.html">List</a>]
+[<a href="../../schema-add">Add</a>]
+[<a href="prop.html">Information</a>
+<a>Edit Information</a>]
+[<a href="cache.dat">Cache (as is)</a>
+<a href="cache.html">Cache (annotated)</a>]
+</div>
+
+<script>
+  function $(id) {
+    return document.getElementById (id);
+  } // $
+
+  function getPropURI () {
+    return location.pathname.replace (/\/propedit\.html$/, '/prop.txt');
+  } // getPropURI
+
+  function setStatus (c, s) {
+    $('status').className = c;
+    $('status').textContent = s;
+  } // setStatus
+
+  var req = new XMLHttpRequest ();
+  req.open ('GET', getPropURI (), true);
+  req.onreadystatechange = function (ev) {
+    if (req.readyState == 4) {
+      if (req.status >= 200 && req.status < 400) {
+        $('editarea').value = req.responseText;
+        setStatus ("info",
+                   "Loaded (" + req.status + ' ' + req.statusText + ')');
+      } else {
+        setStatus ("error",
+                   "Can't load (" + req.status + ' ' + req.statusText + ')');
+      }		
+    }	
+  };
+  req.send (null);
+</script>
+
+</body>
+</html>

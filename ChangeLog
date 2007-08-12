@@ -1,0 +1,14 @@
+2007-08-12  Wakaba  <wakaba@suika.fam.cx>
+
+	* schema.cgi: New file.
+
+	* prop-edit.en.html: New file.
+
+	* schema-add.en.html: New file.
+
+	* ChangeLog: New file.
+
+	* data/: New directory.
+
+	* cvscommit.sh: New file.
+
