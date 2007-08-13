@@ -77,12 +77,17 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
 <head>
 <title lang="$title_lang">$title_text</title>
 <link rel=stylesheet href="/www/style/html/xhtml">
+<script src="../../schema-annotation"></script>
 <style>
   pre {
     counter-reset: line;
+    white-space: normal;
+  }
+  pre > code {
+    color: inherit;
   }
   span.line {
-    display: inline;
+    display: block;
     white-space: -moz-pre-wrap;
     white-space: pre-wrap;
   }
@@ -90,14 +95,58 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
     content: counter(line) ".\\A0";
     counter-increment: line;
   }
+  .sa-with-annotation:before {
+    color: blue;
+  }
+  .sa-line-panel {
+    color: InfoText;
+    background-color: InfoBackground;
+    border: 1px outset WindowFrame;
+    width: 20em;
+    min-width: 5em;
+    max-width: 70%;
+    -moz-binding: url(http://suika.fam.cx/www/style/ui/drag.xbl#simple-drag);
+  }
+  .sa-line-panel-close {
+    display: block;
+    position: absolute;
+    right: 0;
+    top: 0;
+    border-width: 1px;
+    padding: 0;
+    height: 2em;
+    width: 2em;
+  }
+  .sa-line-panel ul, .sa-line-panel menu {
+    margin: 0;
+    padding: 0;
+  }
+  .sa-line-panel li, .sa-line-panel li:first-child:last-child {
+    list-style: none;
+    line-height: 1.0;
+  }
+  .sa-line-panel li + li {
+    margin-top: 0.5em;
+  }
+  input[type=text].sa-object-name {
+    width: 14em;
+  }
+  .sa-object-comment {
+    width: 14em;
+  }
 </style>
 </head>
 <body>
 <h1 lang="$title_lang">$title_text</h1>
 
+<div id=status class=error>Scripting is disabled and therefore
+annotations cannot be shown.</div>
+
 <pre><code>];
+      my $i = 1;
       for (split /\x0D?\x0A/, $file_text) {
-        print qq[<span class=line>], htescape ($_), qq[</span>\n];
+        print qq[<span class=line id=line-@{[$i++]}>], htescape ($_);
+        print qq[</span>\n];
       }
       print qq[</code></pre>], get_html_navigation ('../', $path[1]);
       print qq[</body></html>];
@@ -281,6 +330,63 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
   } elsif ($path[2] eq 'propedit.html') {
     print 'Location: ' . $cgi->script_name . "/../prop-edit\n\n";
     exit;
+  } elsif ($path[2] eq 'annotation.txt') {
+    if ($cgi->request_method eq 'POST') {
+      print "Content-Type: text/plain; charset=us-ascii\n\n";
+      print time . (int (rand (10)), int (rand (10)), int (rand (10)));
+      exit;
+    } else {
+      my $prop = get_prop_hash ($path[1]);
+      print "Content-Type: text/plain; charset=utf-8\n";
+      binmode STDOUT, ':utf8';
+      print "\n";
+      for (@{$prop->{an} or []}) {
+        print $_->[0], "\n";
+      }
+      exit;
+    }
+  }
+} elsif (@path == 4 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
+  if ($path[2] eq 'annotation' and $path[3] =~ /\A([0-9A-Za-z]+)\.txt\z/) {
+    my $id = $1;
+    if ($cgi->request_method eq 'PUT') {
+      my $prop = get_prop_hash ($path[1]);
+      for my $v (@{$prop->{an} or []}) {
+        if ($v->[0] =~ /^\Q$id\E(?>$|\t)/) {
+          ## TODO: Check CONTENT_TYPE
+          $v->[0] = Encode::decode ('utf8', $cgi->entity_body);
+          set_prop_hash ($path[1], $prop);
+          print "Status: 201 Created\nContent-Type: text/plain\n\n201";
+          exit; ## TODO: 201?
+        }
+      }
+      push @{$prop->{an} ||= []},
+          [Encode::decode ('utf8', $cgi->entity_body), ''];
+      set_prop_hash ($path[1], $prop);
+      print "Status: 201 Created\nContent-Type: text/plain\n\n201";
+      exit;
+    } else {
+      print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
+      exit;
+    }
+  } elsif ($path[2] eq 'annotation' and $path[3] =~ /\A[0-9A-Za-z]+\z/) {
+    if ($cgi->request_method eq 'DELETE') {
+      my $prop = get_prop_hash ($path[1]);
+      for my $i (0..$#{$prop->{an} or []}) {
+        my $v = $prop->{an}->[$i];
+        if ($v->[0] =~ /^\Q$path[3]\E(?>$|\t)/) {
+          splice @{$prop->{an}}, $i, 1, ();
+          set_prop_hash ($path[1], $prop);
+          print "Status: 200 Deleted\nContent-Type: text/plain\n\n200";
+          exit; ## TODO: 200?
+        }
+      }
+      print "Status: 200 Deleted\nContent-Type: text/plain\n\n200";
+      exit; ## TODO: 200
+    } else {
+      print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
+      exit;
+    }
   }
 } elsif (@path == 2 and $path[0] eq '' and $path[1] eq '') {
   if ($cgi->request_method eq 'POST') {
@@ -617,8 +723,8 @@ sub get_prop_hash ($) {
       if ($n =~ s/\@([^@]*)$//) {
         $lang = $1;
       }
-      $v =~ s/\\n/\x0A/g;
-      $v =~ s/\\\\/\\/g;
+      $v =~ s/\\n;/\x0A/g;
+      $v =~ s/\\\\;/\\/g;
       push @{$r->{$n} ||= []}, [$v, $lang];
     } elsif (length $_) {
       push @{$r->{$_} ||= []}, ['', ''];
@@ -637,9 +743,9 @@ sub set_prop_hash ($$) {
       my $lang = $_->[1];
       $lang =~ tr/\x0D\x0A//d;
       my $v = $_->[0];
-      $v =~ s/\\/\\\\/g;
-      $v =~ s/\x0D?\x0A/\\n/g;
-      $v =~ s/\x0D/\\n/g;
+      $v =~ s/\\/\\\\;/g;
+      $v =~ s/\x0D?\x0A/\\n;/g;
+      $v =~ s/\x0D/\\n;/g;
       $r .= $n . '@' . $lang . ':' . $v . "\x0A";
     }
   }

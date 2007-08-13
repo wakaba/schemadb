@@ -1,4 +1,4 @@
-<Limit POST PUT>
+<Limit POST PUT DELETE>
   Require user wakaba
   AuthType Basic
   AuthUserFile /home/wakaba/public_html/archive2/.htpasswd

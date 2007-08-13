@@ -1,3 +1,11 @@
+2007-08-13  Wakaba  <wakaba@suika.fam.cx>
+
+	* schema-annotation.js: New file.
+
+	* schema.cgi: Annotation implemented.
+
+	* .htaccess: Don't allow anonymous DELETE.
+
 2007-08-12  Wakaba  <wakaba@suika.fam.cx>
 
 	* schema.cgi: Lists derived_from as well as ref.  Don't 
