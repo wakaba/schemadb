@@ -1,5 +1,9 @@
 2007-08-13  Wakaba  <wakaba@suika.fam.cx>
 
+	* schema.cgi: Use |charset| property for Content-Type.
+
+2007-08-13  Wakaba  <wakaba@suika.fam.cx>
+
 	* schema-annotation.js: New file.
 
 	* schema.cgi: Annotation implemented.

@@ -34,6 +34,9 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
       my $ct = $prop->{content_type}->[0]
           ? $prop->{content_type}->[0]->[0]
           : 'application/octet-stream';
+      if ($prop->{charset}->[0]) {
+        $ct .= '; charset="' . $prop->{charset}->[0]->[0] . '"';
+      }
       $ct =~ s/[\x09\x0A\x0D]+/ /g;
       $ct =~ s/[^\x20-\x7E]+//g;
       print "Content-Type: $ct\n";
