@@ -1,0 +1,62 @@
+@import '/www/style/html/xhtml.css';
+
+  pre {
+    counter-reset: line;
+    white-space: normal;
+    overflow: visible;
+  }
+  pre > code {
+    color: inherit;
+  }
+  pre ins, pre del {
+    display: block;
+    font-size: inherit;
+  }
+  span.line {
+    display: block;
+    white-space: -moz-pre-wrap;
+    white-space: pre-wrap;
+  }
+  .line:before {
+    content: counter(line) ".\A0";
+    counter-increment: line;
+  }
+  .sa-with-annotation:before {
+    color: blue;
+  }
+  .sa-line-panel {
+    color: InfoText;
+    background-color: InfoBackground;
+    border: 1px outset WindowFrame;
+    width: 20em;
+    min-width: 5em;
+    max-width: 70%;
+    -moz-binding: url(http://suika.fam.cx/www/style/ui/drag.xbl#simple-drag);
+  }
+  .sa-line-panel-close {
+    display: block;
+    position: absolute;
+    right: 0;
+    top: 0;
+    border-width: 1px;
+    padding: 0;
+    height: 2em;
+    width: 2em;
+  }
+  .sa-line-panel ul, .sa-line-panel menu {
+    margin: 0;
+    padding: 0;
+  }
+  .sa-line-panel li, .sa-line-panel li:first-child:last-child {
+    list-style: none;
+    line-height: 1.0;
+  }
+  .sa-line-panel li + li {
+    margin-top: 0.5em;
+  }
+  input[type=text].sa-object-name {
+    width: 14em;
+  }
+  .sa-object-comment {
+    width: 14em;
+  }

@@ -79,65 +79,8 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
 <html lang="en">
 <head>
 <title lang="$title_lang">$title_text</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<link rel=stylesheet href="../../schema-style">
 <script src="../../schema-annotation"></script>
-<style>
-  pre {
-    counter-reset: line;
-    white-space: normal;
-  }
-  pre > code {
-    color: inherit;
-  }
-  span.line {
-    display: block;
-    white-space: -moz-pre-wrap;
-    white-space: pre-wrap;
-  }
-  .line:before {
-    content: counter(line) ".\\A0";
-    counter-increment: line;
-  }
-  .sa-with-annotation:before {
-    color: blue;
-  }
-  .sa-line-panel {
-    color: InfoText;
-    background-color: InfoBackground;
-    border: 1px outset WindowFrame;
-    width: 20em;
-    min-width: 5em;
-    max-width: 70%;
-    -moz-binding: url(http://suika.fam.cx/www/style/ui/drag.xbl#simple-drag);
-  }
-  .sa-line-panel-close {
-    display: block;
-    position: absolute;
-    right: 0;
-    top: 0;
-    border-width: 1px;
-    padding: 0;
-    height: 2em;
-    width: 2em;
-  }
-  .sa-line-panel ul, .sa-line-panel menu {
-    margin: 0;
-    padding: 0;
-  }
-  .sa-line-panel li, .sa-line-panel li:first-child:last-child {
-    list-style: none;
-    line-height: 1.0;
-  }
-  .sa-line-panel li + li {
-    margin-top: 0.5em;
-  }
-  input[type=text].sa-object-name {
-    width: 14em;
-  }
-  .sa-object-comment {
-    width: 14em;
-  }
-</style>
 </head>
 <body>
 <h1 lang="$title_lang">$title_text</h1>
@@ -304,7 +247,9 @@ annotations cannot be shown.</div>
                 print qq[<dt>File</dt><dd>];
                 my ($title_text, $title_lang) = get_title ($v);
                 my $uri = $dom->create_uri_reference (q<../> . $v . q</prop.html>);
-                print qq[<a lang="@{[htescape ($title_lang)]}" href="@{[htescape ($uri->get_uri_reference->uri_reference)]}">@{[htescape ($title_text)]}</a></dd>];
+                print qq[<a lang="@{[htescape ($title_lang)]}" href="@{[htescape ($uri->get_uri_reference->uri_reference)]}">@{[htescape ($title_text)]}</a>];
+                print qq[ [<a href="diff/@{[htescape ($v)]}.html">Diff</a>]];
+                print qq[</dd>];
               } else {
                 print qq[<dt>], htescape ($n), qq[</dt>];
                 print qq[<dd lang="@{[htescape ($l)]}">], htescape ($v);
@@ -390,6 +335,43 @@ annotations cannot be shown.</div>
       print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
       exit;
     }
+  } elsif ($path[2] eq 'diff' and $path[3] =~ /\A([0-9a-f]+)\.html\z/) {
+    my $digest = $1;
+    ## TODO: charset
+    my $from_text = [split /\x0D?\x0A/, get_file_text ($digest)];
+    my $to_text = [split /\x0D?\x0A/, get_file_text ($path[1])];
+    my $etitlea = htescape (get_title ($digest));
+    my $etitleb = htescape (get_title ($path[1]));
+    print "Content-Type: text/html; charset=utf-8\n\n";
+    print qq[<!DOCTYPE HTML>
+<html lang=en>
+<head>
+<title>Diff between "$etitlea" and "$etitleb"</title>
+<link rel=stylesheet href="../../../schema-style">
+</head>
+<body>
+<h1>Diff between 
+<a href="../../@{[htescape ($digest)]}/prop.html"><cite>$etitlea</cite></a> and 
+<a href="../prop.html"><cite>$etitleb</cite></a></h1>
+
+<pre><code>];
+    require Algorithm::Diff;
+    my $diff = Algorithm::Diff->new ($from_text, $to_text);
+    while ($diff->Next) {
+      if ($diff->Same) {
+        print qq[<span class=line>], htescape ($_), qq[</span>\n]
+            for $diff->Items (1);
+      } else {
+        print qq[<del><span class=line>], htescape ($_), qq[</span></del>\n]
+            for $diff->Items (1);
+        print qq[<ins><span class=line>], htescape ($_), qq[</span></ins>\n]
+            for $diff->Items (2);
+      }
+    }
+    print qq[</code></pre>];
+    print '', get_html_navigation ('../../', $path[1]);
+    print qq[</body></html>];
+    exit;
   }
 } elsif (@path == 2 and $path[0] eq '' and $path[1] eq '') {
   if ($cgi->request_method eq 'POST') {
@@ -911,6 +893,31 @@ sub get_html_navigation ($$) {
 (<a href="${goto_base}$digest/propedit.html">Edit</a>)]
 [Cache (<a href="${goto_base}$digest/cache.html">annotated</a>, 
 <a href="${goto_base}$digest/cache.dat">original</a>)]
+[<button type=button onclick="
+  var difffrom = '$digest';
+  for (var i = 0; i < cookie.length; i++) {
+    var v = cookie[i].split (/=/, 2);
+    if (v[0] == 'difffrom') {
+      difffrom = v[1];
+      break;
+    }
+  }
+  document.cookie = 'difffrom=' + difffrom +
+      '; path=/; expires=' + (new Date (0)).toGMTString ();
+  document.cookie = 'difffrom=$digest; path=/';
+">Select for diff</button>
+<button type=button onclick="
+  var cookie = document.cookie.split (/\s*;\s*/);
+  var difffrom = '$digest';
+  for (var i = 0; i < cookie.length; i++) {
+    var v = cookie[i].split (/=/, 2);
+    if (v[0] == 'difffrom') {
+      difffrom = v[1];
+      break;
+    }
+  }
+  location.href = '${goto_base}$digest/diff/' + difffrom + '.html';
+">Generate diff</button>]
 ];
   }
 
