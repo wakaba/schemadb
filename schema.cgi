@@ -216,41 +216,53 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
         }
       }
 
-      if ($prop->{ref}->[0]) {
-        print qq[<dt>Reference</dt>];
-        for (@{$prop->{ref}}) {
-          my $v = $_->[0];
-          print qq[<dd><dl>];
-          for (split /\s*;\s*/, $v) {
-            my ($n, $v) = split /\s*:\s*/, $_, 2;
-            my $l = '';
-            if ($n =~ s/\@([^@]+)//) {
-              $l = $1;
-            }
-            if ($n eq 'public_id') {
-              print qq[<dt>Public Identifier</dt><dd>];
-              my $uri = $dom->create_uri_reference (q<../list/pubid.html>);
-              $uri->uri_query ($v);
-              print qq[<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}"><code class=public-id lang="@{[htescape ($l)]}">@{[htescape ($v)]}</code></a></dd>];
-            } elsif ($n eq 'system_id') {
-              print qq[<dt>System Identifier</dt><dd>];
-              my $v_uri = $dom->create_uri_reference ($v);
-              if (defined $prop->{base_uri}->[0]) {
-                $v_uri = $v_uri->get_absolute_reference
-                    ($prop->{base_uri}->[0]->[0]);
+      for ([ref => 'Reference'], [derived_from => 'Derived from']) {
+        my $key = $_->[0];
+        my $label = $_->[1];
+        if ($prop->{$key}->[0]) {
+          print qq[<dt>], $label, q[</dt>];
+          for (@{$prop->{$key}}) {
+            my $v = $_->[0];
+            print qq[<dd><dl>];
+            for (split /\s*;\s*/, $v) {
+              my ($n, $v) = split /\s*:\s*/, $_, 2;
+              my $l = '';
+              if ($n =~ s/\@([^@]+)//) {
+                $l = $1;
               }
-              my $uri = $dom->create_uri_reference (q<../list/uri.html>);
-              $uri->uri_query ($v_uri->uri_reference);
-              print qq[<code class=uri lang="@{[htescape ($l)]}">&lt;<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}">@{[htescape ($v)]}</a>&gt;</code></dd>];
-            } else {
-              print qq[<dt>], htescape ($n), qq[</dt>];
-              print qq[<dd lang="@{[htescape ($l)]}">], htescape ($v);
-              print qq[</dd>];
+              if ($n eq 'public_id') {
+                print qq[<dt>Public Identifier</dt><dd>];
+                my $uri = $dom->create_uri_reference (q<../list/pubid.html>);
+                $uri->uri_query ($v);
+                print qq[<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}"><code class=public-id lang="@{[htescape ($l)]}">@{[htescape ($v)]}</code></a></dd>];
+              } elsif ($n eq 'system_id' or $n eq 'uri') {
+                print qq[<dt>];
+                print {system_id => 'System Identifier',
+                       uri => 'URI'}->{$n};
+                print qq[</dt><dd>];
+                my $v_uri = $dom->create_uri_reference ($v);
+                if (defined $prop->{base_uri}->[0]) {
+                  $v_uri = $v_uri->get_absolute_reference
+                      ($prop->{base_uri}->[0]->[0]);
+                }
+                my $uri = $dom->create_uri_reference (q<../list/uri.html>);
+                $uri->uri_query ($v_uri->uri_reference);
+                print qq[<code class=uri lang="@{[htescape ($l)]}">&lt;<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}">@{[htescape ($v)]}</a>&gt;</code></dd>];
+              } elsif ($n eq 'digest') {
+                print qq[<dt>File</dt><dd>];
+                my ($title_text, $title_lang) = get_title ($v);
+                my $uri = $dom->create_uri_reference (q<../> . $v . q</prop.html>);
+                print qq[<a lang="@{[htescape ($title_lang)]}" href="@{[htescape ($uri->get_uri_reference->uri_reference)]}">@{[htescape ($title_text)]}</a></dd>];
+              } else {
+                print qq[<dt>], htescape ($n), qq[</dt>];
+                print qq[<dd lang="@{[htescape ($l)]}">], htescape ($v);
+                print qq[</dd>];
+              }
             }
+            print qq[</dl></dd>];
           }
-          print qq[</dl></dd>];
+          delete $keys{$key};
         }
-        delete $keys{ref};
       }
 
       for my $key (sort {$a cmp $b} keys %keys) {
@@ -282,8 +294,10 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
           ## New file
           set_file_text ($digest => $ent->{s});
         }
-        add_prop ($prop, 'uri', $ent->{uri}.'<>'.time_to_rfc3339 (time), '');
-        add_prop ($prop, 'base_uri', $ent->{base_uri}, '');
+        unless ($ent->{uri} =~ m!suika\.fam\.cx/~wakaba/-temp/!) {
+          add_prop ($prop, 'uri', $ent->{uri}.'<>'.time_to_rfc3339 (time), '');
+          add_prop ($prop, 'base_uri', $ent->{base_uri}, '');
+        }
         add_prop ($prop, 'content_type', $ent->{media_type}, '');
         add_prop ($prop, 'charset', $ent->{charset}, '')
             if defined $ent->{charset};
@@ -687,6 +701,7 @@ sub get_map ($) {
 sub set_map ($$) {
   my $file_name = $map_directory . $_[0] . '.map';
   require Data::Dumper;
+  $Data::Dumper::Sortkeys = 1;
   open my $file, '>', $file_name or die "$0: $file_name: $!";
   print $file Data::Dumper::Dumper ($_[1]);
   return 1;

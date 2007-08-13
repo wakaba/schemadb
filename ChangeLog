@@ -1,5 +1,11 @@
 2007-08-12  Wakaba  <wakaba@suika.fam.cx>
 
+	* schema.cgi: Lists derived_from as well as ref.  Don't 
+	set uri property if the soruce is Wakaba's temporary area.
+	(set_map): Sort keys.
+
+2007-08-12  Wakaba  <wakaba@suika.fam.cx>
+
 	* schema.cgi: Use title for lists.  Resolve system
 	identifiers in |ref| property.
 
