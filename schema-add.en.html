@@ -1,15 +1,30 @@
 <!DOCTYPE HTML>
-<html lang=en>
+<html lang=en id=schema-add>
 <head>
 <title>Add New Schema</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<link rel=stylesheet href="schema-style">
 </head>
 <body>
 <h1>Add New Schema</h1>
 
+<h2>Entire a document</h2>
+
 <form action="schema/" method=post accept-charset=utf-8>
 
-<p><label>URI: <input type=url name=uri value="http://"></label></p>
+<p><label>URI: <input type=url name=uri value=""></label></p>
+
+<p><button type=submit>Add</button></p>
+
+</form>
+
+<h2>Part of a document</h2>
+
+<form action="schema/" method=post accept-charset=utf-8>
+
+<p><label>URI: <input type=url name=uri value=""></label></p>
+<p><label>Digest: <input type=text name=digest value=""></label></p>
+
+<p><label>Fragment to add:<br><textarea name=s></textarea></label></p>
 
 <p><button type=submit>Add</button></p>
 

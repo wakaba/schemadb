@@ -1,5 +1,10 @@
 2007-08-14  Wakaba  <wakaba@suika.fam.cx>
 
+	* schema-add.en.html, schema.cgi: "Schema in another document" addition
+	supported.
+
+2007-08-14  Wakaba  <wakaba@suika.fam.cx>
+
 	* schema-style.css: New file.  (Split from schema.cgi).
 
 	* schema.cgi: Diff mode support.

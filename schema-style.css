@@ -60,3 +60,7 @@
   .sa-object-comment {
     width: 14em;
   }
+
+#schema-add textarea {
+  height: 20em;
+}

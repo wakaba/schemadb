@@ -211,7 +211,8 @@ annotations cannot be shown.</div>
         }
       }
 
-      for ([ref => 'Reference'], [derived_from => 'Derived from']) {
+      for ([src => 'Source'], [ref => 'Reference'],
+           [derived_from => 'Derived from']) {
         my $key = $_->[0];
         my $label = $_->[1];
         if ($prop->{$key}->[0]) {
@@ -375,35 +376,26 @@ annotations cannot be shown.</div>
   }
 } elsif (@path == 2 and $path[0] eq '' and $path[1] eq '') {
   if ($cgi->request_method eq 'POST') {
+    my $s = $cgi->get_parameter ('s');
     my $uri = $cgi->get_parameter ('uri');
-    if (defined $uri) {
-      my $ent = get_remote_entity ($uri);
-      if (defined $ent->{s}) {
-        my $digest = get_digest ($ent->{s});
-        my $prop = get_prop_hash ($digest);
-        unless (keys %$prop) {
-          ## New file
-          set_file_text ($digest => $ent->{s});
-        }
-        unless ($ent->{uri} =~ m!suika\.fam\.cx/~wakaba/-temp/!) {
-          add_prop ($prop, 'uri', $ent->{uri}.'<>'.time_to_rfc3339 (time), '');
-          add_prop ($prop, 'base_uri', $ent->{base_uri}, '');
-        }
-        add_prop ($prop, 'content_type', $ent->{media_type}, '');
-        add_prop ($prop, 'charset', $ent->{charset}, '')
-            if defined $ent->{charset};
-        for (@{$ent->{header_field}}) {
-          my ($n, $v) = (lc $_->[0], $_->[1]);
-          if ($n eq 'last-modified') {
-            my $lm = http_to_rfc3339 ($v);
-            if (length $lm) {
-              add_prop ($prop, 'last_modified', $lm, '');
-            }
-          }
-        }
-        set_prop_hash ($digest => $prop);
+    my $ent;
+    if (defined $s) {
+      $ent->{digest} = $cgi->get_parameter ('digest');
+      if ((not defined $ent->{digest} or not length $ent->{digest}) and
+          defined $uri) {
+        my $containing_ent = get_remote_entity ($uri);
+        $ent->{digest} = add_entity ($containing_ent);
+      }
+      $ent->{s} = $s; ## TODO: charset
+      $ent->{charset} = 'utf-8';
+      $ent->{documentation_uri} = $uri;
+    } elsif (defined $uri) {
+      $ent = get_remote_entity ($uri);
+    }
 
-        update_maps ($digest, $prop);
+    if (defined $ent) {
+      if (defined $ent->{s}) {
+        my $digest = add_entity ($ent);
 
         print "Status: 201 Created\n";
         print "Content-Type: text/html; charset=iso-8859-1\n";
@@ -648,8 +640,9 @@ sub htescape ($) {
 sub get_digest ($) {
   require Digest::MD5;
   my $v = $_[0];
-  $v =~ s/\x0D\x0A/\x0A/g;
+  $v =~ s/\x0D+\x0A/\x0A/g;
   $v =~ tr/\x0D/\x0A/;
+  $v =~ s/\x0A+\z//;
   return Digest::MD5::md5_hex ($v);
 } # get_digest
 
@@ -925,6 +918,43 @@ sub get_html_navigation ($$) {
 
   return $r;
 } # get_html_navigation
+
+sub add_entity ($) {
+  my $ent = shift;
+  my $digest = get_digest ($ent->{s});
+  my $prop = get_prop_hash ($digest);
+  unless (keys %$prop) {
+    ## New file
+    set_file_text ($digest => $ent->{s});
+  }
+  if (defined $ent->{uri} and $ent->{uri} !~ m!suika\.fam\.cx/~wakaba/-temp/!) {
+    add_prop ($prop, 'uri', $ent->{uri}.'<>'.time_to_rfc3339 (time), '');
+    add_prop ($prop, 'base_uri', $ent->{base_uri}, '')
+        if defined $ent->{base_uri};
+  }
+  if (defined $ent->{digest}) {
+    add_prop ($prop, 'src', 'digest:'.$ent->{digest}, '');
+  }
+  add_prop ($prop, 'documentation_uri', $ent->{documentation_uri}, '')
+      if defined $ent->{documentation_uri};
+  add_prop ($prop, 'content_type', $ent->{media_type}, '')
+      if defined $ent->{media_type};
+  add_prop ($prop, 'charset', $ent->{charset}, '')
+      if defined $ent->{charset};
+  for (@{$ent->{header_field} or []}) {
+    my ($n, $v) = (lc $_->[0], $_->[1]);
+    if ($n eq 'last-modified') {
+      my $lm = http_to_rfc3339 ($v);
+      if (length $lm) {
+        add_prop ($prop, 'last_modified', $lm, '');
+      }
+    }
+  }
+
+  set_prop_hash ($digest => $prop);
+  update_maps ($digest, $prop);
+  return $digest;
+} # add_entity
 
 sub get_remote_entity ($) {
   my $request_uri = $_[0];
