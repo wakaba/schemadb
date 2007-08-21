@@ -8,6 +8,7 @@ require Message::CGI::Carp;
 
 my $data_directory = './data/';
 my $map_directory = $data_directory;
+my $lock_file_name = $data_directory . '.lock';
 my $DEBUG = 1;
 
 use Encode;
@@ -100,9 +101,12 @@ annotations cannot be shown.</div>
     }    
   } elsif ($path[2] eq 'prop.txt') {
     if ($cgi->request_method eq 'PUT') {
+      lock_start ();
       ## TODO: CONTENT_TYPE check
+      my $old_prop = get_prop_hash ($path[1]);
       my $prop_text = Encode::decode ('utf8', $cgi->entity_body);
       if (set_prop_text ($path[1], $prop_text, new_file => 0)) {
+        delete_from_maps ($path[1] => $old_prop);
         my $prop = get_prop_hash ($path[1]);
         update_maps ($path[1] => $prop);
 
@@ -144,7 +148,7 @@ annotations cannot be shown.</div>
 
       if ($prop->{uri}->[0]) {
         print qq[<dt lang="en">URI</dt>];
-        for my $v (@{$prop->{uri}}) {
+        for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{uri}}) {
           my $uri = $v->[0];
           my $etime = '';
           if ($uri =~ s/<>(.*)$//s) {
@@ -168,7 +172,7 @@ annotations cannot be shown.</div>
 
       if ($prop->{public_id}->[0]) {
         print qq[<dt lang="en">Public Identifier</dt>];
-        for my $v (@{$prop->{public_id}}) {
+        for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{public_id}}) {
           my $uri = $dom->create_uri_reference (q<../list/pubid.html>);
           $uri->uri_query ($v->[0]);
           my $elang = htescape ($v->[1]);
@@ -179,7 +183,7 @@ annotations cannot be shown.</div>
 
       if ($prop->{system_id}->[0]) {
         print qq[<dt lang="en">System Identifier</dt>];
-        for my $v (@{$prop->{system_id}}) {
+        for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{system_id}}) {
           my $uri = $v->[0];
           my $euri = htescape ($uri);
           my $elang = htescape ($v->[1]);
@@ -192,6 +196,21 @@ annotations cannot be shown.</div>
           print qq[</dd>];
         }
         delete $keys{system_id};
+      }
+
+      for ([tag => 'Tag']) {
+        my $key = $_->[0];
+        my $label = $_->[1];
+        if ($prop->{$key}) {
+          print qq[<dt lang="en">$label</dt>];
+          for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{$key}}) {
+            my $uri = $dom->create_uri_reference (q<../list/tag.html>);
+            $uri->uri_query ($v->[0]);
+            my $elang = htescape ($v->[1]);
+            print qq[<dd><a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}" lang="@{[htescape ($v->[1])]}">@{[htescape ($v->[0])]}</a></dd>];
+          }
+          delete $keys{$key};
+        }
       }
 
       for ([editor => 'Editor'], [editor_mail => 'Editor (mail)'],
@@ -299,6 +318,7 @@ annotations cannot be shown.</div>
   if ($path[2] eq 'annotation' and $path[3] =~ /\A([0-9A-Za-z]+)\.txt\z/) {
     my $id = $1;
     if ($cgi->request_method eq 'PUT') {
+      lock_start ();
       my $prop = get_prop_hash ($path[1]);
       for my $v (@{$prop->{an} or []}) {
         if ($v->[0] =~ /^\Q$id\E(?>$|\t)/) {
@@ -320,6 +340,7 @@ annotations cannot be shown.</div>
     }
   } elsif ($path[2] eq 'annotation' and $path[3] =~ /\A[0-9A-Za-z]+\z/) {
     if ($cgi->request_method eq 'DELETE') {
+      lock_start ();
       my $prop = get_prop_hash ($path[1]);
       for my $i (0..$#{$prop->{an} or []}) {
         my $v = $prop->{an}->[$i];
@@ -376,6 +397,7 @@ annotations cannot be shown.</div>
   }
 } elsif (@path == 2 and $path[0] eq '' and $path[1] eq '') {
   if ($cgi->request_method eq 'POST') {
+    lock_start ();
     my $s = $cgi->get_parameter ('s');
     my $uri = $cgi->get_parameter ('uri');
     my $ent;
@@ -616,6 +638,68 @@ annotations cannot be shown.</div>
       print qq[</body></html>];
       exit;
     }
+  } elsif ($path[2] eq 'tag.html') {
+    my $query = $cgi->query_string;
+    
+    if (defined $query and length $query) {
+      print "Content-Type: text/html; charset=utf-8\n";
+      binmode STDOUT, ':utf8';
+      print "\n";
+      
+      $query = '?' . $query;
+      my $turi = $dom->create_uri_reference ($query)
+          ->get_iri_reference
+          ->uri_query;
+      $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
+      my $eturi = htescape ($turi);
+      
+      print qq[<!DOCTYPE HTML>
+<html lang=en>
+<head>
+<title>Entries Associated with "$eturi"</title>
+<link rel=stylesheet href="/www/style/html/xhtml">
+</head>
+<body>
+<h1>Entries Associated with <q>$eturi</q></h1>
+<ul>];
+
+      my $uri_to_entity = get_map ('tag_to_entity')->{$turi};
+      for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
+        my $uri2 = $dom->create_uri_reference
+            (q<../> . $digest . q</prop.html>);
+        my $euri2 = htescape ($uri2);
+        my ($title_text, $title_lang) = get_title ($digest);
+        print qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>];
+      }
+      print qq[</ul>], get_html_navigation ('../', undef);
+      print qq[</body></html>];
+      exit;
+    } else {
+      print "Content-Type: text/html; charset=utf-8\n";
+      binmode STDOUT, ':utf8';
+      print "\n";
+      print qq[<!DOCTYPE HTML>
+<html lang=en>
+<head>
+<title>List of Tags</title>
+<link rel=stylesheet href="/www/style/html/xhtml">
+</head>
+<body>
+<h1>List of Tags</h1>
+<ul>];
+
+      my $uri_list = get_map ('tag_to_entity');
+      for (sort {$a cmp $b} keys %$uri_list) {
+        my $euri = htescape ($_);
+        my $uri2 = $dom->create_uri_reference (q<tag.html>);
+        $uri2->uri_query ($_);
+        my $euri2 = htescape ($uri2);
+        print qq[<li><a href="$euri2">$euri</a></li>];
+      }
+      print qq[</ul>], get_html_navigation ('../', undef);
+      print qq[</body></html>];
+      exit;
+    }
   }
 }
 
@@ -645,6 +729,13 @@ sub get_digest ($) {
   $v =~ s/\x0A+\z//;
   return Digest::MD5::md5_hex ($v);
 } # get_digest
+
+sub lock_start () {
+  our $lock;
+  open $lock, '>', $lock_file_name or die "$0: $lock_file_name: $!";
+  use Fcntl ':flock';
+  flock $lock, LOCK_EX;
+} # lock_start
 
 sub get_file_text ($) {
   my $file_name = $data_directory . $_[0] . '.dat';
@@ -791,6 +882,58 @@ sub set_map ($$) {
   return 1;
 } # set_map
 
+sub delete_from_maps ($$) {
+  my ($digest, $prop) = @_;
+  
+  my $uri_to_entity = get_map ('uri_to_entity');
+  for (map {$_->[0]} @{$prop->{uri}}, @{$prop->{system_id}}) {
+    my $uri = $_;
+    $uri =~ s/<>.*$//gs;
+    delete $uri_to_entity->{$uri}->{$digest};
+  }
+  set_map (uri_to_entity => $uri_to_entity);
+
+  my $pubid_to_entity = get_map ('pubid_to_entity');
+  for (map {$_->[0]} @{$prop->{public_id}}) {
+    my $pubid = $_;
+    ## TODO: Is this normalization correct?
+    $pubid =~ s/\s+/ /g;
+    $pubid =~ s/^ //;
+    $pubid =~ s/ $//;
+    delete $pubid_to_entity->{$pubid}->{$digest};
+    delete $pubid_to_entity->{$pubid} unless keys %{$pubid_to_entity->{$pubid}};
+  }
+  set_map (pubid_to_entity => $pubid_to_entity);
+
+  my $editor_to_entity = get_map ('editor_to_entity');
+  for (map {$_->[0]} @{$prop->{editor}},
+       @{$prop->{editor_mail}},
+       @{$prop->{rcs_user}},
+       @{$prop->{author}},
+       @{$prop->{author_mail}}) {
+    my $name = $_;
+    $name =~ s/\s+/ /g;
+    $name =~ s/^ //;
+    $name =~ s/ $//;
+    delete $editor_to_entity->{$name}->{$digest};
+    delete $editor_to_entity->{$name} unless keys %{$editor_to_entity->{$name}};
+  }
+  set_map (editor_to_entity => $editor_to_entity);
+
+  my $tag_to_entity = get_map ('tag_to_entity');
+  for (map {$_->[0]} @{$prop->{tag}}) {
+    my $name = $_;
+    $name =~ s/\s+/ /g;
+    $name =~ s/^ //;
+    $name =~ s/ $//;
+    delete $tag_to_entity->{$name}->{$digest};
+    delete $tag_to_entity->{$name} unless keys %{$tag_to_entity->{$name}};
+  }
+  set_map (tag_to_entity => $tag_to_entity);
+
+  #get_map ('digest_to_title');
+} # delete_from_maps
+
 sub update_maps ($$) {
   my ($digest, $prop) = @_;
   
@@ -826,6 +969,16 @@ sub update_maps ($$) {
     $editor_to_entity->{$name}->{$digest} = 1;
   }
   set_map (editor_to_entity => $editor_to_entity);
+
+  my $tag_to_entity = get_map ('tag_to_entity');
+  for (map {$_->[0]} @{$prop->{tag}}) {
+    my $name = $_;
+    $name =~ s/\s+/ /g;
+    $name =~ s/^ //;
+    $name =~ s/ $//;
+    $tag_to_entity->{$name}->{$digest} = 1;
+  }
+  set_map (tag_to_entity => $tag_to_entity);
 
   my ($title_text, $title_lang) = get_title_prop_text ($prop);
   if ($title_text eq '' and $title_lang eq '') {
@@ -877,7 +1030,8 @@ sub get_html_navigation ($$) {
   my $r = qq[<div class=navigation>
 [List files by <a href="${goto_base}list/uri.html">URI</a>,
 <a href="${goto_base}list/pubid.html">Public ID</a>,
-<a href="${goto_base}list/editor.html">Editor</a>]
+<a href="${goto_base}list/editor.html">Editor</a>,
+<a href="${goto_base}list/tag.html">Tag</a>]
 [<a href="${goto_base}../schema-add">Add file</a>]
 ];
   if (defined $digest) {
@@ -900,7 +1054,7 @@ sub get_html_navigation ($$) {
   document.cookie = 'difffrom=$digest; path=/';
 ">Select for diff</button>
 <button type=button onclick="
-  var cookie = document.cookie.split (/\s*;\s*/);
+  var cookie = document.cookie.split (/\\s*;\\s*/);
   var difffrom = '$digest';
   for (var i = 0; i < cookie.length; i++) {
     var v = cookie[i].split (/=/, 2);
@@ -926,6 +1080,8 @@ sub add_entity ($) {
   unless (keys %$prop) {
     ## New file
     set_file_text ($digest => $ent->{s});
+  } else {
+    delete_from_maps ($digest, $prop);
   }
   if (defined $ent->{uri} and $ent->{uri} !~ m!suika\.fam\.cx/~wakaba/-temp/!) {
     add_prop ($prop, 'uri', $ent->{uri}.'<>'.time_to_rfc3339 (time), '');

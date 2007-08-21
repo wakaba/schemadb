@@ -19,6 +19,7 @@
 <p><textarea id="editarea"></textarea></p>
 
 <p><button type=button onclick="
+  setStatus ('info', 'Saving...');
   var req = new XMLHttpRequest ();
   req.open ('PUT', getPropURI (), true);
   req.setRequestHeader ('Content-Type', 'text/plain; charset=utf-8');
@@ -41,7 +42,8 @@
 <div class=navigation>
 [List files by <a href="../list/uri.html">URI</a>,
 <a href="../list/pubid.html">Public ID</a>,
-<a href="../list/editor.html">Editor</a>]
+<a href="../list/editor.html">Editor</a>,
+<a href="../list/tag.html">Tag</a>]
 [<a href="../../schema-add">Add file</a>]
 
 [<a href="prop.html">Information</a>
@@ -65,6 +67,7 @@
     $('status').textContent = s;
   } // setStatus
 
+  setStatus ('info', 'Loading...');
   var req = new XMLHttpRequest ();
   req.open ('GET', getPropURI (), true);
   req.onreadystatechange = function (ev) {

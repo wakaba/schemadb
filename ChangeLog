@@ -1,3 +1,7 @@
+2007-08-21  Wakaba  <wakaba@suika.fam.cx>
+
+	* schema.cgi (get_html_navigation): A backspace was not escaped.
+
 2007-08-14  Wakaba  <wakaba@suika.fam.cx>
 
 	* schema-add.en.html, schema.cgi: "Schema in another document" addition
