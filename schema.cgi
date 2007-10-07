@@ -365,6 +365,7 @@ annotations cannot be shown.</div>
     my $etitlea = htescape (get_title ($digest));
     my $etitleb = htescape (get_title ($path[1]));
     print "Content-Type: text/html; charset=utf-8\n\n";
+    $| = 1;
     print qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
@@ -483,7 +484,10 @@ annotations cannot be shown.</div>
         my ($title_text, $title_lang) = get_title ($digest);
         print qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>];
       }
-      print qq[</ul>];
+      print qq[</ul><form action="../" method=post accept-charset=utf-8>
+        <p><button type=submit>Retrieve latest entity</button>
+        <input type=hidden name=uri value="$eturi"></p>
+      </form>];
       print '', get_html_navigation ('../', undef);
       print qq[</body></html>];
       exit;

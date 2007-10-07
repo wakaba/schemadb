@@ -1,3 +1,12 @@
+2007-10-08  Wakaba  <wakaba@suika.fam.cx>
+
+	* schema.cgi: "Add schema" button is added in "entries associated
+	with a URI" mode.
+
+2007-10-08  Wakaba  <wakaba@suika.fam.cx>
+
+	* schema.cgi: Flush stdout in diff mode.
+
 2007-08-21  Wakaba  <wakaba@suika.fam.cx>
 
 	* schema.cgi (get_html_navigation): A backspace was not escaped.
