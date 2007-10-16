@@ -1004,9 +1004,9 @@ sub http_to_rfc3339 ($) {
     require Time::Local;
     my $t = Time::Local::timegm_nocheck
         ($6 || 0, $5, $4, $1,
-         {jan => 0, feb => 1, mar => 1, apr => 1, may => 1,
-          jun => 1, jul => 1, aug => 1, sep => 1, oct => 1,
-          nov => 1, dec => 1}->{lc $2} || 0, $3);
+         {jan => 0, feb => 1, mar => 2, apr => 3, may => 4,
+          jun => 5, jul => 6, aug => 7, sep => 8, oct => 9,
+          nov => 10, dec => 11}->{lc $2} || 0, $3);
     my @t = gmtime $t;
     return sprintf '%04d-%02d-%02d %02d:%02d:%02dZ',
         $t[5] + 1900, $t[4] + 1, $t[3], $t[2], $t[1], $t[0];
@@ -1122,7 +1122,9 @@ sub get_remote_entity ($) {
 
     my $uri = $dom->create_uri_reference ($request_uri);
     unless ({
+             ftp => 1,
              http => 1,
+             https => 1,
             }->{lc $uri->uri_scheme}) {
       return {uri => $request_uri, request_uri => $request_uri,
               error_status_text => 'URI scheme not allowed'};
@@ -1162,7 +1164,7 @@ EOH
     $ua->{wdcc_host_permit} = $host_permit;
     $ua->agent ('Mozilla'); ## TODO: for now.
     $ua->parse_head (0);
-    $ua->protocols_allowed ([qw/http/]);
+    $ua->protocols_allowed ([qw/ftp http https/]);
     $ua->max_size (1000_000);
     my $req = HTTP::Request->new (GET => $request_uri);
     my $res = $ua->request ($req);
