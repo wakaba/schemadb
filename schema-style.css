@@ -64,3 +64,20 @@
 #schema-add textarea {
   height: 20em;
 }
+
+dd.tag {
+  display: inline;
+}
+
+dd.tag::before {
+  content: ",  ";
+  white-space: pre;
+}
+
+dt.tag + dd.tag::before {
+  content: "";
+}
+
+dd.tag + dd.tag {
+  margin-left: 0;
+}

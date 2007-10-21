@@ -135,11 +135,11 @@ annotations cannot be shown.</div>
       print qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
-<title lang="$title_lang">$title_text &mdash; Information</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<title lang="$title_lang">Information on $title_text</title>
+<link rel=stylesheet href="../../schema-style">
 </head>
 <body>
-<h1 lang="$title_lang">$title_text &mdash; Information</h1>
+<h1 lang="$title_lang">Information on $title_text</h1>
 ];
 
       my %keys = map {$_ => 1} keys %$prop;
@@ -185,9 +185,14 @@ annotations cannot be shown.</div>
         print qq[<dt lang="en">System Identifier</dt>];
         for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{system_id}}) {
           my $uri = $v->[0];
+          if (defined $prop->{base_uri}->[0]) {
+            $uri = $dom->create_uri_reference ($uri)
+                ->get_absolute_reference
+                    ($prop->{base_uri}->[0]->[0])->uri_reference;
+          }
           my $euri = htescape ($uri);
           my $elang = htescape ($v->[1]);
-          print qq[<dd><code class=uri lang="$elang">&lt;<a href="$euri">$euri</a>&gt;</code>];
+          print qq[<dd><code class=uri lang="$elang">&lt;<a href="$euri">@{[htescape ($v->[0])]}</a>&gt;</code>];
           
           my $uri2 = $dom->create_uri_reference (q<../list/uri.html>);
           $uri2->uri_query ($uri);
@@ -202,12 +207,12 @@ annotations cannot be shown.</div>
         my $key = $_->[0];
         my $label = $_->[1];
         if ($prop->{$key}) {
-          print qq[<dt lang="en">$label</dt>];
+          print qq[<dt lang="en" class="$key">$label</dt>];
           for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{$key}}) {
             my $uri = $dom->create_uri_reference (q<../list/tag.html>);
             $uri->uri_query ($v->[0]);
             my $elang = htescape ($v->[1]);
-            print qq[<dd><a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}" lang="@{[htescape ($v->[1])]}">@{[htescape ($v->[0])]}</a></dd>];
+            print qq[<dd class="$key"><a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}" lang="@{[htescape ($v->[1])]}">@{[htescape ($v->[0])]}</a></dd>];
           }
           delete $keys{$key};
         }
@@ -230,8 +235,12 @@ annotations cannot be shown.</div>
         }
       }
 
-      for ([src => 'Source'], [ref => 'Reference'],
-           [derived_from => 'Derived from']) {
+      for ([src => 'Source'],
+           [contains => 'Contains'],
+           [ref => 'Reference'],
+           [derived_from => 'Derived from'],
+           [documentation => 'Documentation'],
+           [related => 'Related file']) {
         my $key = $_->[0];
         my $label = $_->[1];
         if ($prop->{$key}->[0]) {
@@ -290,14 +299,66 @@ annotations cannot be shown.</div>
               htescape ($_->[0]), qq[</dd>\n];
         }
       }
-      
-      print qq[</dl>], get_html_navigation ('../', $path[1]);
+
+      print qq[<dt>MD5 Digest</dt><dd><code>$path[1]</code></dd>\n];
+      print qq[</dl>];
+
+      if (defined $prop->{content_type}->[0] and
+          ($prop->{content_type}->[0]->[0] eq 'application/zip' or
+           $prop->{content_type}->[0]->[0] =~ /\+zip$/)) {
+        print q[<form action=expand method=post><p><button type=submit>Expand</button></p></form>];
+      }
+
+      print scalar get_html_navigation ('../', $path[1]);
       print qq[</body></html>];
       exit;
     }
   } elsif ($path[2] eq 'propedit.html') {
     print 'Location: ' . $cgi->script_name . "/../prop-edit\n\n";
     exit;
+  } elsif ($path[2] eq 'expand') {
+    if ($cgi->request_method eq 'POST') {
+      lock_start ();
+      my $prop = get_prop_hash ($path[1]);
+      if (defined $prop->{content_type}->[0] and
+          ($prop->{content_type}->[0]->[0] eq 'application/zip' or
+           $prop->{content_type}->[0]->[0] =~ /\+zip$/)) {
+        my $prop = get_prop_hash ($path[1]);
+        my $file_name = get_file_name ($path[1]);
+        require Archive::Zip;
+        my $zip = Archive::Zip->new;
+        my $error_code = $zip->read($file_name);
+        if ($error_code == Archive::Zip::AZ_OK ()) {
+          print "Status: 201 Created\nContent-Type: text/html; charset=utf-8\n\n";
+          $| = 1;
+          print qq[<!DOCTYPE HTML><html lang=""><title>201 Created</title><ul>];
+          for my $member ($zip->members) {
+            next if $member->isDirectory;
+            my $ent = {};
+            $ent->{file_name} = $member->fileName;
+            $ent->{last_modified} = time_to_rfc3339 ($member->lastModTime);
+            $ent->{digest} = $path[1];
+            $ent->{s} = $member->contents;
+            my $digest = add_entity ($ent);
+            my $uri = '../'.$digest.q</prop.html>;
+            print qq[<li><a href="@{[htescape ($uri)]}"><code class=file>@{[htescape ($ent->{file_name})]}</code></a></li>];
+            add_prop ($prop, 'contains', 'digest:'.$digest, '');
+          }
+          print qq[</ul>];
+          set_prop_hash ($path[1], $prop);
+          exit;
+        } else {
+          print "Status: 400 Not expandable\nContent-Type: text/plain\n\n400 ($error_code)";
+          exit;
+        }
+      } else {
+        print "Status: 400 Not expandable\nContent-Type: text/plain\n\n400";
+        exit;
+      }
+    } else {
+      print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
+      exit;
+    }
   } elsif ($path[2] eq 'annotation.txt') {
     if ($cgi->request_method eq 'POST') {
       print "Content-Type: text/plain; charset=us-ascii\n\n";
@@ -411,9 +472,10 @@ annotations cannot be shown.</div>
       }
       $ent->{s} = $s; ## TODO: charset
       $ent->{charset} = 'utf-8';
-      $ent->{documentation_uri} = $uri;
+      $ent->{documentation} = 'uri:'.$uri;
     } elsif (defined $uri) {
       $ent = get_remote_entity ($uri);
+      $ent->{digest} = $cgi->get_parameter ('digest');
     }
 
     if (defined $ent) {
@@ -741,10 +803,15 @@ sub lock_start () {
   flock $lock, LOCK_EX;
 } # lock_start
 
+sub get_file_name ($) {
+  return $data_directory . $_[0] . '.dat';
+} # get_file_name
+
 sub get_file_text ($) {
-  my $file_name = $data_directory . $_[0] . '.dat';
+  my $file_name = get_file_name ($_[0]);
   if (-f $file_name) {
     open my $file, '<', $file_name or die "$0: $file_name: $!";
+    binmode $file;
     local $/ = undef;
     return <$file>;
   } else {
@@ -753,12 +820,14 @@ sub get_file_text ($) {
 } # get_file_text
 
 sub set_file_text ($$) {
-  my $file_name = $data_directory . $_[0] . '.dat';
+  my $file_name = get_file_name ($_[0]);
   if (-f $file_name) {
     die "$0: $file_name: File exists";
   } else {
     open my $file, '>', $file_name or die "$0: $file_name: $!";
+    binmode $file;
     print $file $_[1];
+    close $file;
   }
 } # set_file_text
 
@@ -1095,12 +1164,12 @@ sub add_entity ($) {
   if (defined $ent->{digest}) {
     add_prop ($prop, 'src', 'digest:'.$ent->{digest}, '');
   }
-  add_prop ($prop, 'documentation_uri', $ent->{documentation_uri}, '')
-      if defined $ent->{documentation_uri};
+  for my $prop_name (qw/documentation file_name charset last_modified/) {
+    add_prop ($prop, $prop_name, $ent->{$prop_name}, '')
+        if defined $ent->{$prop_name};
+  }
   add_prop ($prop, 'content_type', $ent->{media_type}, '')
       if defined $ent->{media_type};
-  add_prop ($prop, 'charset', $ent->{charset}, '')
-      if defined $ent->{charset};
   for (@{$ent->{header_field} or []}) {
     my ($n, $v) = (lc $_->[0], $_->[1]);
     if ($n eq 'last-modified') {
@@ -1165,7 +1234,7 @@ EOH
     $ua->agent ('Mozilla'); ## TODO: for now.
     $ua->parse_head (0);
     $ua->protocols_allowed ([qw/ftp http https/]);
-    $ua->max_size (1000_000);
+    #$ua->max_size (1000_000);
     my $req = HTTP::Request->new (GET => $request_uri);
     my $res = $ua->request ($req);
     ## TODO: 401 sets |is_success| true.
