@@ -251,7 +251,7 @@ annotations cannot be shown.</div>
             for (split /\s*;\s*/, $v) {
               my ($n, $v) = split /\s*:\s*/, $_, 2;
               my $l = '';
-              if ($n =~ s/\@([^@]+)//) {
+              if ($n =~ s/\@([^@]*)$//) {
                 $l = $1;
               }
               if ($n eq 'public_id') {
@@ -514,18 +514,20 @@ annotations cannot be shown.</div>
   }
 } elsif (@path == 3 and $path[0] eq '' and $path[1] eq 'list') {
   if ($path[2] eq 'uri.html') {
-      print "Content-Type: text/html; charset=utf-8\n";
+    print "Content-Type: text/html; charset=utf-8\n\n";
+    binmode STDOUT, ':utf8';
+    $| = 1;
+    
     my $query = $cgi->query_string;
+    my $prefix = '';
     
     if (defined $query and length $query) {
-      binmode STDOUT, ':utf8';
-      print "\n";
-      
       $query = '?' . $query;
       my $turi = $dom->create_uri_reference ($query)
           ->get_iri_reference
           ->uri_query;
       $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
+      $prefix = $turi;
       my $eturi = htescape ($turi);
       
       print qq[<!DOCTYPE HTML>
@@ -550,35 +552,37 @@ annotations cannot be shown.</div>
         <p><button type=submit>Retrieve latest entity</button>
         <input type=hidden name=uri value="$eturi"></p>
       </form>];
-      print '', get_html_navigation ('../', undef);
-      print qq[</body></html>];
-      exit;
     } else {
-      print "Content-Type: text/html; charset=utf-8\n";
-      binmode STDOUT, ':utf8';
-      print "\n";
       print qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title>List of URIs</title>
 <link rel=stylesheet href="/www/style/html/xhtml">
 </head>
-<body>
-<h1>List of URIs</h1>
-<ul>];
-
-      my $uri_list = get_map ('uri_to_entity');
-      for (sort {$a cmp $b} keys %$uri_list) {
-        my $euri = htescape ($_);
-        my $uri2 = $dom->create_uri_reference (q<uri.html>);
-        $uri2->uri_query ($_);
-        my $euri2 = htescape ($uri2);
-        print qq[<li><code class=uri lang=en>&lt;<a href="$euri2">$euri</a>&gt;</code></li>];
-      }
-      print qq[</ul>], get_html_navigation ('../', undef);
-      print qq[</body></html>];
-      exit;
+<body>];
     }
+    
+    print qq[<h1>List of URIs</h1><ul>];
+      
+    my $lprefix = length $prefix;
+    my $uri_list = get_map ('uri_to_entity');
+    my $puri = '';
+    for my $uri (sort {$a cmp $b} grep {$prefix eq substr $_, 0, $lprefix}
+                 keys %$uri_list) {
+      $uri =~ s!^(\Q$prefix\E.+?/+)[^/].*$!$1!;
+      next if $uri eq $puri;
+      $puri = $uri;
+      my $euri = htescape ($uri);
+      my $uri2 = $dom->create_uri_reference (q<uri.html>);
+      $uri2->uri_query ($uri);
+      my $euri2 = htescape ($uri2);
+      print qq[<li><code class=uri lang=en>&lt;<a href="$euri2">$euri</a>&gt;</code></li>];
+    }
+    print qq[</ul>];
+   
+    print scalar get_html_navigation ('../', undef);
+    print qq[</body></html>];
+    exit;
   } elsif ($path[2] eq 'pubid.html') {
     my $query = $cgi->query_string;
     
@@ -745,10 +749,10 @@ annotations cannot be shown.</div>
       binmode STDOUT, ':utf8';
       print "\n";
       print qq[<!DOCTYPE HTML>
-<html lang=en>
+<html lang=en class=page-tags>
 <head>
 <title>List of Tags</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<link rel=stylesheet href="../../schema-style">
 </head>
 <body>
 <h1>List of Tags</h1>
@@ -1161,7 +1165,7 @@ sub add_entity ($) {
     add_prop ($prop, 'base_uri', $ent->{base_uri}, '')
         if defined $ent->{base_uri};
   }
-  if (defined $ent->{digest}) {
+  if (defined $ent->{digest} and length $ent->{digest}) {
     add_prop ($prop, 'src', 'digest:'.$ent->{digest}, '');
   }
   for my $prop_name (qw/documentation file_name charset last_modified/) {
@@ -1186,7 +1190,8 @@ sub add_entity ($) {
 } # add_entity
 
 sub get_remote_entity ($) {
-  my $request_uri = $_[0];
+  my $request_uri = $dom->create_uri_reference ($_[0]);
+  $request_uri->uri_fragment (undef);
   my $r = {};
 
     my $uri = $dom->create_uri_reference ($request_uri);
@@ -1195,7 +1200,8 @@ sub get_remote_entity ($) {
              http => 1,
              https => 1,
             }->{lc $uri->uri_scheme}) {
-      return {uri => $request_uri, request_uri => $request_uri,
+      return {uri => $request_uri->uri_reference,
+              request_uri => $request_uri->uri_reference,
               error_status_text => 'URI scheme not allowed'};
     }
 
@@ -1223,7 +1229,8 @@ Deny ipv6=0::0/0
 Allow host=*
 EOH
     unless ($host_permit->check ($uri->uri_host, $uri->uri_port || 80)) {
-      return {uri => $request_uri, request_uri => $request_uri,
+      return {uri => $request_uri->uri_reference,
+              request_uri => $request_uri->uri_reference,
               error_status_text => 'Connection to the host is forbidden'};
     }
 
@@ -1235,7 +1242,7 @@ EOH
     $ua->parse_head (0);
     $ua->protocols_allowed ([qw/ftp http https/]);
     #$ua->max_size (1000_000);
-    my $req = HTTP::Request->new (GET => $request_uri);
+    my $req = HTTP::Request->new (GET => $request_uri->uri_reference);
     my $res = $ua->request ($req);
     ## TODO: 401 sets |is_success| true.
     if ($res->is_success) {
@@ -1256,7 +1263,7 @@ EOH
       $r->{s} = ''.$res->content;
     } else {
       $r->{uri} = $res->request->uri;
-      $r->{request_uri} = $request_uri;
+      $r->{request_uri} = $request_uri->uri_reference;
       $r->{error_status_text} = $res->status_line;
     }
 

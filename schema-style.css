@@ -81,3 +81,18 @@ dt.tag + dd.tag::before {
 dd.tag + dd.tag {
   margin-left: 0;
 }
+
+.page-tags ul {
+  display: block;
+  text-indent: 0;
+  text-align: justify;
+}
+
+.page-tags ul li {
+  display: inline;
+  list-style: none;
+  margin-right: 1em;
+  margin-left: 0;
+  padding: 0;
+}
+
