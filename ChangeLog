@@ -1,5 +1,10 @@
 2007-10-28  Wakaba  <wakaba@suika.fam.cx>
 
+	* schema.cgi: Support for empty language specification
+	in nested resource specification.
+
+2007-10-28  Wakaba  <wakaba@suika.fam.cx>
+
 	* schema.cgi: List of URIs doesn't list all of URIs once.
 
 2007-10-08  Wakaba  <wakaba@suika.fam.cx>

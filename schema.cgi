@@ -237,8 +237,8 @@ annotations cannot be shown.</div>
 
       for ([src => 'Source'],
            [contains => 'Contains'],
-           [ref => 'Reference'],
            [derived_from => 'Derived from'],
+           [ref => 'Reference'],
            [documentation => 'Documentation'],
            [related => 'Related file']) {
         my $key = $_->[0];
