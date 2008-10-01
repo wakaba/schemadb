@@ -452,7 +452,41 @@ annotations cannot be shown.</div>
             for $diff->Items (2);
       }
     }
-    print qq[</code></pre>];
+    print qq[
+      </code></pre>
+      
+      <details id=diff-props>
+      <legend>Properties</legend>
+
+      <table class=diff-props>
+      <thead>
+      <tr><th><a href="../../@{[htescape ($digest)]}/prop.html"><cite>$etitlea</cite></a>
+      <th><a href="../prop.html"><cite>$etitleb</cite></a>
+
+      <tbody>];
+    
+    my $from_prop_text = [grep {length $_}
+                          split /\x0D?\x0A/,
+                          get_normalized_prop_text ($digest)];
+    my $to_prop_text = [grep {length $_}
+                        split /\x0D?\x0A/,
+                        get_normalized_prop_text ($path[1])];
+    my $diff = Algorithm::Diff->new ($from_prop_text, $to_prop_text);
+    while ($diff->Next) {
+      if ($diff->Same) {
+        print qq[<tr><td colspan=2><code>], htescape ($_), q[</code>]
+            for $diff->Items (1);
+      } else {
+        print qq[<tr><td><del><code>], htescape ($_), qq[</code></del>]
+            for $diff->Items (1);
+        print qq[<tr><td><td><ins><code>], htescape ($_), qq[</code></ins>]
+            for $diff->Items (2);
+      }
+    }
+
+    print qq[</table>
+             </details>
+             <nav><p><a href="../../@{[htescape ($digest)]}/diff/@{[htescape ($path[1])]}.html">Reverse</a></nav>];
     print '', get_html_navigation ('../../', $path[1]);
     print qq[</body></html>];
     exit;
@@ -879,8 +913,8 @@ sub get_prop_hash ($) {
   return $r;
 } # get_prop_hash
 
-sub set_prop_hash ($$) {
-  my $hash = $_[1];
+sub serialize_prop_hash ($) {
+  my $hash = $_[0];
   my $r = '';
   for my $n (sort {$a cmp $b} keys %$hash) {
     my $key = $n;
@@ -895,8 +929,18 @@ sub set_prop_hash ($$) {
       $r .= $n . '@' . $lang . ':' . $v . "\x0A";
     }
   }
+  return $r;
+} # serialize_prop_hash
+
+sub set_prop_hash ($$) {
+  my $r = serialize_prop_hash ($_[1]);
   return set_prop_text ($_[0] => $r, new_file => 1);
 } # set_prop_hash
+
+sub get_normalized_prop_text ($) {
+  my $prop_hash = get_prop_hash ($_[0]);
+  return serialize_prop_hash ($prop_hash);
+} # get_normalized_prop_text
 
 sub get_title ($) {
   my $digest = shift;

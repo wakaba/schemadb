@@ -1,3 +1,9 @@
+2008-10-02  Wakaba  <wakaba@suika.fam.cx>
+
+	* schema-style.css: New rules for property diffs.
+
+	* schema.cgi: For diff mode, generate diff of properties as table.
+
 2007-10-28  Wakaba  <wakaba@suika.fam.cx>
 
 	* schema.cgi: Support for empty language specification
