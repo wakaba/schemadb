@@ -1,5 +1,11 @@
 2008-10-02  Wakaba  <wakaba@suika.fam.cx>
 
+	* schema.cgi: Changed the diff-sync mode to be in UTF-8.
+	($no_sync_pattern): |label| added.
+	(get_map, set_map): Drop old Data::Dumper .map support.
+
+2008-10-02  Wakaba  <wakaba@suika.fam.cx>
+
 	* schema.cgi: Create copies of maps using Storable, since
 	Data::Dumper is the most significant bottleneck of the script.
 

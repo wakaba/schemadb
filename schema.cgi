@@ -426,6 +426,7 @@ annotations cannot be shown.</div>
     my $etitlea = htescape (get_title ($digest));
     my $etitleb = htescape (get_title ($path[1]));
     print "Content-Type: text/html; charset=utf-8\n\n";
+    binmode STDOUT, ':utf8';
     $| = 1;
     print qq[<!DOCTYPE HTML>
 <html lang=en>
@@ -459,7 +460,8 @@ annotations cannot be shown.</div>
       derived_from|src|
       documentation|documentation_uri|
       last_modified|modified_in_content|
-      rcs_date|rcs_revision|rcs_user
+      rcs_date|rcs_revision|rcs_user|
+      label
     /x;
 
     my $edigest_old = htescape ($digest);
@@ -546,7 +548,7 @@ annotations cannot be shown.</div>
       delete_from_maps ($digest, $prop);
       for ($cgi->get_parameter
                ($dir eq 'old-to-new' ? 'prop-new' : 'prop-old')) {
-        my ($n, $v) = split /\s*:\s*/, $_, 2;
+        my ($n, $v) = split /\s*:\s*/, Encode::decode ('utf-8', $_), 2;
         my $lang = '';
         if ($n =~ s/\@([^@]*)$//) {
           $lang = $1;
@@ -1070,11 +1072,6 @@ sub get_map ($) {
   my $file_name = $map_directory . $_[0] . '.smap';
   if (-f $file_name) {
     return retrieve ($file_name) or die "$0: $file_name: $!";
-  }
-
-  my $file_name = $map_directory . $_[0] . '.map';
-  if (-f $file_name) {
-    return do $file_name;
   } else {
     return {};  
   }
@@ -1083,12 +1080,6 @@ sub get_map ($) {
 sub set_map ($$) {
   my $file_name = $map_directory . $_[0] . '.smap';
   store ($_[1] => $file_name) or die "$0: $file_name: $!";
-
-  my $file_name = $map_directory . $_[0] . '.map';
-  require Data::Dumper;
-  $Data::Dumper::Sortkeys = 1;
-  open my $file, '>', $file_name or die "$0: $file_name: $!";
-  print $file Data::Dumper::Dumper ($_[1]);
   return 1;
 } # set_map
 
