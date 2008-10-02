@@ -1064,7 +1064,14 @@ sub add_prop ($$$$) {
   push @{$prop->{$key}}, [$_[2], $_[3]];
 } # add_prop
 
+use Storable qw/retrieve store/;
+
 sub get_map ($) {
+  my $file_name = $map_directory . $_[0] . '.smap';
+  if (-f $file_name) {
+    return retrieve ($file_name) or die "$0: $file_name: $!";
+  }
+
   my $file_name = $map_directory . $_[0] . '.map';
   if (-f $file_name) {
     return do $file_name;
@@ -1074,6 +1081,9 @@ sub get_map ($) {
 } # get_map
 
 sub set_map ($$) {
+  my $file_name = $map_directory . $_[0] . '.smap';
+  store ($_[1] => $file_name) or die "$0: $file_name: $!";
+
   my $file_name = $map_directory . $_[0] . '.map';
   require Data::Dumper;
   $Data::Dumper::Sortkeys = 1;

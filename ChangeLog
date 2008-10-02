@@ -1,5 +1,10 @@
 2008-10-02  Wakaba  <wakaba@suika.fam.cx>
 
+	* schema.cgi: Create copies of maps using Storable, since
+	Data::Dumper is the most significant bottleneck of the script.
+
+2008-10-02  Wakaba  <wakaba@suika.fam.cx>
+
 	* schema.cgi: diff-sync mode supported.
 	(serialize_prop_hash): Sort certain multivalue properties by their
 	values.
