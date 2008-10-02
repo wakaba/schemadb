@@ -1,5 +1,11 @@
 2008-10-02  Wakaba  <wakaba@suika.fam.cx>
 
+	* schema.cgi: diff-sync mode supported.
+	(serialize_prop_hash): Sort certain multivalue properties by their
+	values.
+
+2008-10-02  Wakaba  <wakaba@suika.fam.cx>
+
 	* schema-style.css: New rules for property diffs.
 
 	* schema.cgi: For diff mode, generate diff of properties as table.

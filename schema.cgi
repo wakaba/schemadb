@@ -452,15 +452,29 @@ annotations cannot be shown.</div>
             for $diff->Items (2);
       }
     }
+
+    my $no_sync_pattern = qr/
+      charset|content_type|
+      base_uri|uri|
+      derived_from|src|
+      documentation|documentation_uri|
+      last_modified|modified_in_content|
+      rcs_date|rcs_revision|rcs_user
+    /x;
+
+    my $edigest_old = htescape ($digest);
+    my $edigest_new = htescape ($path[1]);
     print qq[
       </code></pre>
       
       <details id=diff-props>
       <legend>Properties</legend>
 
+      <form action="../diff-sync/$edigest_old" method=post
+          accept-charset=utf-8>
       <table class=diff-props>
       <thead>
-      <tr><th><a href="../../@{[htescape ($digest)]}/prop.html"><cite>$etitlea</cite></a>
+      <tr><th><a href="../../$edigest_old/prop.html"><cite>$etitlea</cite></a>
       <th><a href="../prop.html"><cite>$etitleb</cite></a>
 
       <tbody>];
@@ -477,19 +491,76 @@ annotations cannot be shown.</div>
         print qq[<tr><td colspan=2><code>], htescape ($_), q[</code>]
             for $diff->Items (1);
       } else {
-        print qq[<tr><td><del><code>], htescape ($_), qq[</code></del>]
-            for $diff->Items (1);
-        print qq[<tr><td><td><ins><code>], htescape ($_), qq[</code></ins>]
-            for $diff->Items (2);
+        for ($diff->Items (1)) {
+          my $ev = htescape ($_);
+          print qq[<tr><td><del><code>$ev</code></del>];
+          my $checked = $ev =~ /^(?:$no_sync_pattern)[\@:]/ ? '' : 'checked';
+          print qq[<td><label><input type=checkbox name=prop-new value="$ev"
+                   $checked> Add this property</label>];
+        }
+        for ($diff->Items (2)) {
+          my $ev = htescape ($_);
+          my $checked = $ev =~ /^(?:$no_sync_pattern)[\@:]/ ? '' : 'checked';
+          print qq[<tr><td><label><input type=checkbox name=prop-old
+                   value="$ev" $checked> Add this property</label>];
+          print qq[<td><ins><code>$ev</code></ins>];
+        }
       }
     }
 
-    print qq[</table>
-             </details>
-             <nav><p><a href="../../@{[htescape ($digest)]}/diff/@{[htescape ($path[1])]}.html">Reverse</a></nav>];
+    print qq[
+      <tfoot>
+  
+      <tr>
+      <td><label><input type=checkbox name=prop-old
+          value="derived_from:digest:@{[htescape ($path[1])]}">
+      Add <code>derived_from</code> property (&lt;-)</label>
+      <td><label><input type=checkbox name=prop-new
+          value="derived_from:digest:@{[htescape ($digest)]}" checked>
+      Add <code>derived_from</code> property (->)</label>
+
+      <tr>
+      <td><button type=submit name=prop-sync value=new-to-old>Add properties
+      to this file</button>
+      <td><button type=submit name=prop-sync value=old-to-new>Add properties
+      to this file</button>
+
+      <tr>
+      <td><a href="../../$edigest_old/propedit.html">Edit</a>
+      <td><a href="../../$edigest_new/propedit.html">Edit</a>
+  
+      </table>
+      </form>
+
+      </details>
+      <nav>[<a href="../../$edigest_old/diff/$edigest_new.html"
+          >Reverse</a>]</nav>];
     print '', get_html_navigation ('../../', $path[1]);
-    print qq[</body></html>];
     exit;
+  } elsif ($path[2] eq 'diff-sync' and $path[3] =~ /\A[0-9a-f]+\z/) {
+    if ($cgi->request_method eq 'POST') {
+      lock_start ();
+      my $dir = $cgi->get_parameter ('prop-sync') // '';
+      my $digest = $dir eq 'old-to-new' ? $path[1] : $path[3];
+      my $prop = get_prop_hash ($digest);
+      delete_from_maps ($digest, $prop);
+      for ($cgi->get_parameter
+               ($dir eq 'old-to-new' ? 'prop-new' : 'prop-old')) {
+        my ($n, $v) = split /\s*:\s*/, $_, 2;
+        my $lang = '';
+        if ($n =~ s/\@([^@]*)$//) {
+          $lang = $1;
+        }
+        add_prop ($prop, $n, $v, $lang);
+      }
+      set_prop_hash ($digest, $prop);
+      update_maps ($digest, $prop);
+      print "Status: 204 Properties Updated\n\n";
+      exit;
+    } else {
+      print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
+      exit;
+    }
   }
 } elsif (@path == 2 and $path[0] eq '' and $path[1] eq '') {
   if ($cgi->request_method eq 'POST') {
@@ -918,7 +989,15 @@ sub serialize_prop_hash ($) {
   my $r = '';
   for my $n (sort {$a cmp $b} keys %$hash) {
     my $key = $n;
-    for (@{$hash->{$key}}) {
+    my @values = @{$hash->{$key}};
+    @values = sort {$a->[0] cmp $b->[0]} @values
+        if {
+            base_uri => 1,
+            ref => 1,
+            tag => 1,
+            uri => 1,
+           }->{$key};
+    for (@values) {
       $n =~ tr/\x0D\x0A//d;
       my $lang = $_->[1];
       $lang =~ tr/\x0D\x0A//d;
