@@ -681,6 +681,7 @@ annotations cannot be shown.</div>
       $puri = $uri;
       my $euri = htescape ($uri);
       my $uri2 = $dom->create_uri_reference (q<uri.html>);
+      $uri =~ s/([%\\\|<>`])/sprintf '%%%02X', ord $1/ge; # TODO: ...
       $uri2->uri_query ($uri);
       my $euri2 = htescape ($uri2);
       print qq[<li><code class=uri lang=en>&lt;<a href="$euri2">$euri</a>&gt;</code></li>];
@@ -994,10 +995,11 @@ sub serialize_prop_hash ($) {
     my @values = @{$hash->{$key}};
     @values = sort {$a->[0] cmp $b->[0]} @values
         if {
-            base_uri => 1,
             ref => 1,
             tag => 1,
             uri => 1,
+            ## NOTE: Following property names are intentionally
+            ## excluded: |base_uri|, |content_type|, |charset|
            }->{$key};
     for (@values) {
       $n =~ tr/\x0D\x0A//d;

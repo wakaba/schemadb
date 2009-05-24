@@ -1,3 +1,7 @@
+2009-05-24  Wakaba  <wakaba@suika.fam.cx>
+
+	* schema.cgi: Percent-encode URLs used in query component.
+
 2008-10-02  Wakaba  <wakaba@suika.fam.cx>
 
 	* schema.cgi: Changed the diff-sync mode to be in UTF-8.
