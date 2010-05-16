@@ -1202,6 +1202,7 @@ sub update_maps ($$) {
 sub commit_changes () {
   chdir $data_directory;
 
+  system 'git add * > /dev/null';
   system 'git commit -m update -a > /dev/null';
 
   chdir $data_directory_back;
@@ -1376,7 +1377,7 @@ EOH
     }
 
     require LWP::UserAgent;
-    my $ua = WDCC::LWPUA->new;
+    my $ua = WDCC::LWPUA->new (timeout => 30);
     $ua->{wdcc_dom} = $dom;
     $ua->{wdcc_host_permit} = $host_permit;
     $ua->agent ('Mozilla'); ## TODO: for now.
