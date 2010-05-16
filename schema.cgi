@@ -110,10 +110,9 @@ annotations cannot be shown.</div>
         delete_from_maps ($path[1] => $old_prop);
         my $prop = get_prop_hash ($path[1]);
         update_maps ($path[1] => $prop);
-        commit_changes ();
-
         print "Status: 201 Created\nContent-Type: text/plain\n\n201";
         ## TODO: Is this status code OK?
+        commit_changes ();
       }
     } else {
       my $prop_text = get_prop_text ($path[1]);
@@ -389,8 +388,8 @@ annotations cannot be shown.</div>
           ## TODO: Check CONTENT_TYPE
           $v->[0] = Encode::decode ('utf8', $cgi->entity_body);
           set_prop_hash ($path[1], $prop);
-          commit_changes ();
           print "Status: 201 Created\nContent-Type: text/plain\n\n201";
+          commit_changes ();
           exit; ## TODO: 201?
         }
       }
@@ -398,6 +397,7 @@ annotations cannot be shown.</div>
           [Encode::decode ('utf8', $cgi->entity_body), ''];
       set_prop_hash ($path[1], $prop);
       print "Status: 201 Created\nContent-Type: text/plain\n\n201";
+      commit_changes ();
       exit;
     } else {
       print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
