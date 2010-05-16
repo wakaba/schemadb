@@ -112,6 +112,7 @@ annotations cannot be shown.</div>
         update_maps ($path[1] => $prop);
         print "Status: 201 Created\nContent-Type: text/plain\n\n201";
         ## TODO: Is this status code OK?
+        close STDOUT;
         commit_changes ();
       }
     } else {
@@ -347,6 +348,7 @@ annotations cannot be shown.</div>
           }
           print qq[</ul>];
           set_prop_hash ($path[1], $prop);
+          close STDOUT;
           commit_changes ();
           exit;
         } else {
@@ -389,6 +391,7 @@ annotations cannot be shown.</div>
           $v->[0] = Encode::decode ('utf8', $cgi->entity_body);
           set_prop_hash ($path[1], $prop);
           print "Status: 201 Created\nContent-Type: text/plain\n\n201";
+          close STDOUT;
           commit_changes ();
           exit; ## TODO: 201?
         }
@@ -397,6 +400,7 @@ annotations cannot be shown.</div>
           [Encode::decode ('utf8', $cgi->entity_body), ''];
       set_prop_hash ($path[1], $prop);
       print "Status: 201 Created\nContent-Type: text/plain\n\n201";
+      close STDOUT;
       commit_changes ();
       exit;
     } else {
@@ -412,8 +416,9 @@ annotations cannot be shown.</div>
         if ($v->[0] =~ /^\Q$path[3]\E(?>$|\t)/) {
           splice @{$prop->{an}}, $i, 1, ();
           set_prop_hash ($path[1], $prop);
-          commit_changes ();
           print "Status: 200 Deleted\nContent-Type: text/plain\n\n200";
+          close STDOUT;
+          commit_changes ();
           exit; ## TODO: 200?
         }
       }
@@ -563,6 +568,7 @@ annotations cannot be shown.</div>
       set_prop_hash ($digest, $prop);
       update_maps ($digest, $prop);
       print "Status: 204 Properties Updated\n\n";
+      close STDOUT;
       commit_changes ();
       exit;
     } else {
@@ -605,6 +611,7 @@ annotations cannot be shown.</div>
         print "\n";
         my $euri = htescape ($uri);
         print qq[<a href="$euri">$euri</a>];
+        close STDOUT;
         commit_changes ();
         exit;
       } else {
