@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 use strict;
-
-use lib qw[/home/httpd/html/www/markup/html/whatpm
-           /home/wakaba/work/manakai2/lib];
+use warnings;
+use Path::Class;
+use lib glob file (__FILE__)->dir->subdir ('modules/*/lib');
 use CGI::Carp qw[fatalsToBrowser];
 require Message::CGI::Carp;
 
