@@ -3,8 +3,9 @@ AddType text/html .cgi
 AddHandler cgi-script .cgi
 
 <Limit POST PUT DELETE>
-  Require user wakaba
+  Require group schema-db
   AuthType Basic
-  AuthUserFile /home/wakaba/public_html/archive2/.htpasswd
+  AuthUserFile /home/wakaba/public_html/pbin/accounts/data/htpasswd
+  AuthGroupFile /home/wakaba/public_html/pbin/accounts/data/htgroup
   AuthName "Schema Database"
 </Limit>
