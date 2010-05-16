@@ -11,9 +11,6 @@ my $map_directory = $data_directory;
 my $lock_file_name = $data_directory . '.lock';
 my $DEBUG = 1;
 
-$ENV{QUERY_STRING} =~ s/(?:&|^)ru=[^&]+$//;
-$ENV{QUERY_STRING} =~ s/^ru=[^&]+(?:&|$)//;
-
 use Encode;
 
 use Message::URI::URIReference;
