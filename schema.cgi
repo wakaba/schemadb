@@ -1,12 +1,13 @@
 #!/usr/bin/perl
 use strict;
-use warnings;
+#use warnings;
 use Path::Class;
 use lib glob file (__FILE__)->dir->subdir ('modules/*/lib');
 use CGI::Carp qw[fatalsToBrowser];
 require Message::CGI::Carp;
 
 my $data_directory = './data/';
+my $data_directory_back = '../';
 my $map_directory = $data_directory;
 my $lock_file_name = $data_directory . '.lock';
 my $DEBUG = 1;
@@ -109,6 +110,7 @@ annotations cannot be shown.</div>
         delete_from_maps ($path[1] => $old_prop);
         my $prop = get_prop_hash ($path[1]);
         update_maps ($path[1] => $prop);
+        commit_changes ();
 
         print "Status: 201 Created\nContent-Type: text/plain\n\n201";
         ## TODO: Is this status code OK?
@@ -346,6 +348,7 @@ annotations cannot be shown.</div>
           }
           print qq[</ul>];
           set_prop_hash ($path[1], $prop);
+          commit_changes ();
           exit;
         } else {
           print "Status: 400 Not expandable\nContent-Type: text/plain\n\n400 ($error_code)";
@@ -386,6 +389,7 @@ annotations cannot be shown.</div>
           ## TODO: Check CONTENT_TYPE
           $v->[0] = Encode::decode ('utf8', $cgi->entity_body);
           set_prop_hash ($path[1], $prop);
+          commit_changes ();
           print "Status: 201 Created\nContent-Type: text/plain\n\n201";
           exit; ## TODO: 201?
         }
@@ -408,6 +412,7 @@ annotations cannot be shown.</div>
         if ($v->[0] =~ /^\Q$path[3]\E(?>$|\t)/) {
           splice @{$prop->{an}}, $i, 1, ();
           set_prop_hash ($path[1], $prop);
+          commit_changes ();
           print "Status: 200 Deleted\nContent-Type: text/plain\n\n200";
           exit; ## TODO: 200?
         }
@@ -558,6 +563,7 @@ annotations cannot be shown.</div>
       set_prop_hash ($digest, $prop);
       update_maps ($digest, $prop);
       print "Status: 204 Properties Updated\n\n";
+      commit_changes ();
       exit;
     } else {
       print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
@@ -599,6 +605,7 @@ annotations cannot be shown.</div>
         print "\n";
         my $euri = htescape ($uri);
         print qq[<a href="$euri">$euri</a>];
+        commit_changes ();
         exit;
       } else {
         print "Status: 400 Specified URI cannot be dereferenced\n";
@@ -1191,6 +1198,14 @@ sub update_maps ($$) {
   $digest_to_title->{$digest} = [$title_text, $title_lang];
   set_map (digest_to_title => $digest_to_title);
 } # update_maps
+
+sub commit_changes () {
+  chdir $data_directory;
+
+  system 'git commit -m update -a > /dev/null';
+
+  chdir $data_directory_back;
+} # commit_changes
 
 sub time_to_rfc3339 ($) {
   my @t = gmtime $_[0];
