@@ -689,9 +689,9 @@ annotations cannot be shown.</div>
     my $uri_list = get_map ('uri_to_entity');
     my $puri = '';
     for my $uri (sort {$a cmp $b}
-                 grep {m!^(?:http://web\.archive\.org/web/[0-9]+/)?\Q$prefix\E!}
+                 grep {m!^(?:http://(?:web\.archive\.org/web|replay\.waybackmachine\.org)/[0-9]+/)?\Q$prefix\E!}
                  keys %$uri_list) {
-      $uri =~ s!^((?:http://web\.archive\.org/web/[0-9]+/)?\Q$prefix\E.+?/+)[^/].*$!$1!;
+      $uri =~ s!^((?:http://(?:web\.archive\.org/web|replay\.waybackmachine\.org)/[0-9]+/)?\Q$prefix\E.+?/+)[^/].*$!$1!;
       next if $uri eq $puri;
       $puri = $uri;
       my $euri = htescape ($uri);
