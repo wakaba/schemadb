@@ -3,81 +3,93 @@ use strict;
 #use warnings;
 use Path::Class;
 use lib glob file (__FILE__)->dir->subdir ('modules/*/lib');
-use CGI::Carp qw[fatalsToBrowser];
-require Message::CGI::Carp;
+use Encode;
+use Wanage::URL;
+use Wanage::HTTP;
+use Warabe::App;
+use Web::URL::Canonicalize qw(url_to_canon_url);
 
 my $data_directory = './data/';
 my $data_directory_back = '../';
 my $map_directory = $data_directory;
 my $lock_file_name = $data_directory . '.lock';
-my $DEBUG = 1;
 
-use Encode;
+sub resolve_url ($$) {
+  my $base = defined $_[1] ? url_to_canon_url $_[1], 'about:blank' : 'about:blank';
+  return url_to_canon_url $_[0], $base;
+} # resolve_url
 
-use Message::URI::URIReference;
-my $dom = 'Message::DOM::DOMImplementation';
+sub psgi_app () {
+  return sub {
+    my $http = Wanage::HTTP->new_from_psgi_env ($_[0]);
+    my $app = Warabe::App->new_from_http ($http);
 
-use Message::CGI::HTTP;
-my $cgi = Message::CGI::HTTP->new;
+    # XXX accesslog
+    warn sprintf "ACCESS: [%s] %s %s FROM %s %s\n",
+        scalar gmtime,
+        $app->http->request_method, $app->http->url->stringify,
+        $app->http->client_ip_addr->as_text,
+        $app->http->get_request_header ('User-Agent') // '';
 
-print "Cache-Control: no-cache\n" if $DEBUG;
+    return $http->send_response (onready => sub {
+      $app->execute (sub {
+        return __PACKAGE__->main ($app);
+      });
+    });
+  };
+} # psgi_app
 
-my $path = $cgi->path_info;
-$path = '' unless defined $path;
+sub main ($$) {
+  my ($class, $app) = @_;
+  my $path = $app->path_segments;
 
-my @path = split m#/#, percent_decode ($path), -1;
-
-if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
-  if ($path[2] eq 'cache.dat') {
-    my $file_text = get_file_text ($path[1]);
-    if (defined $file_text) {
-      my $prop = get_prop_hash ($path[1]);
-      print "Status: 203 Non-Authoritative Information\n";
-      my $ct = $prop->{content_type}->[0]
-          ? $prop->{content_type}->[0]->[0]
-          : 'application/octet-stream';
-      if ($prop->{charset}->[0]) {
-        $ct .= '; charset="' . $prop->{charset}->[0]->[0] . '"';
+  if (@$path == 2 and $path->[0] =~ /\A[0-9a-f]+\z/) {
+    if ($path->[1] eq 'cache.dat') {
+      # /{key}/cache.dat
+      my $file_text = get_file_text ($path->[0]);
+      if (defined $file_text) {
+        my $prop = get_prop_hash ($path->[0]);
+        $app->http->set_status (203);
+        my $ct = $prop->{content_type}->[0]
+            ? $prop->{content_type}->[0]->[0]
+            : 'application/octet-stream';
+        if ($prop->{charset}->[0]) {
+          $ct .= '; charset="' . $prop->{charset}->[0]->[0] . '"';
+        }
+        $ct =~ s/[\x09\x0A\x0D]+/ /g;
+        $ct =~ s/[^\x20-\x7E]+//g;
+        $app->http->set_response_header ('Content-Type' => $ct);
+        my $file_name = $prop->{file_name}->[0]
+            ? $prop->{file_name}->[0]->[0] : '';
+        $file_name =~ s/[\x09\x0A\x0D]+/ /g;
+        $file_name =~ s/[^\x20-\x7E]+//g;
+        if (length $file_name) {
+          $file_name =~ s/\\/\\\\/g;
+          $file_name =~ s/"/\\"/g;
+          $app->http->set_response_header
+              (q[Content-Disposition] => qq[inline; filename="$file_name"]);
+        }
+        my $lm = $prop->{last_modified}->[0]
+            ? rfc3339_to_http ($prop->{last_modified}->[0]->[0]) : '';
+        if (length $lm) {
+          $app->http->set_response_header ('Last-Modified' => $lm);
+        }
+        $app->http->set_response_header ('Content-Security-Policy' => 'sandbox');
+        $app->http->send_response_body_as_ref (\$file_text);
+        $app->http->close_response_body;
+        return;
       }
-      $ct =~ s/[\x09\x0A\x0D]+/ /g;
-      $ct =~ s/[^\x20-\x7E]+//g;
-      print "Content-Type: $ct\n";
-      my $file_name = $prop->{file_name}->[0]
-          ? $prop->{file_name}->[0]->[0] : '';
-      $file_name =~ s/[\x09\x0A\x0D]+/ /g;
-      $file_name =~ s/[^\x20-\x7E]+//g;
-      if (length $file_name) {
-        $file_name =~ s/\\/\\\\/g;
-        $file_name =~ s/"/\\"/g;
-        print qq[Content-Disposition: inline; filename="$file_name"\n];
-      }
-      my $uri = $prop->{base_uri}->[0] ? $prop->{base_uri}->[0]->[0] : '';
-      if (length $uri) {
-        print q[Content-Location: ];
-        print $dom->create_uri_reference ($uri)
-            ->get_uri_reference->uri_reference;
-        print "\n";
-      }
-      my $lm = $prop->{last_modified}->[0]
-          ? rfc3339_to_http ($prop->{last_modified}->[0]->[0]) : '';
-      if (length $lm) {
-        print "Last-Modified: Mon, $lm\n";
-        ## NOTE: Weekday is not a matter, since Apache rewrites it.
-      }
-      print "\n";
-      print $file_text;
-      exit;      
-    }    
-  } elsif ($path[2] eq 'cache.html') {
-    my $file_text = get_file_text ($path[1]);
-    if (defined $file_text) {
-      my ($title_text, $title_lang) = get_title ($path[1]);
-      $title_text = htescape ($title_text);
-      $title_lang = htescape ($title_lang);
-
-      print "Content-Type: text/html; charset=utf-8\n\n";
-      binmode STDOUT, ':utf8';
-      print qq[<!DOCTYPE HTML>
+    } elsif ($path->[1] eq 'cache.html') {
+      # /{key}/cache.html
+      my $file_text = get_file_text ($path->[0]);
+      if (defined $file_text) {
+        my ($title_text, $title_lang) = get_title ($path->[0]);
+        $title_text = htescape ($title_text);
+        $title_lang = htescape ($title_lang);
+        $app->http->set_response_header
+            ('Content-Type' => 'text/html; charset=utf-8');
+        $app->http->send_response_body_as_text
+            (qq[<!DOCTYPE HTML>
 <html lang="en">
 <head>
 <title lang="$title_lang">$title_text</title>
@@ -90,51 +102,52 @@ if (@path == 3 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
 <div id=status class=error>Scripting is disabled and therefore
 annotations cannot be shown.</div>
 
-<pre><code>];
-      my $i = 1;
-      for (split /\x0D?\x0A/, $file_text) {
-        print qq[<span class=line id=line-@{[$i++]}>], htescape ($_);
-        print qq[</span>\n];
+<pre><code>]);
+        my $i = 1;
+        for (split /\x0D?\x0A/, $file_text) {
+          $app->http->send_response_body_as_text
+              (qq[<span class=line id=line-@{[$i++]}>] . htescape ($_) . qq[</span>\n]);
+        }
+        $app->http->send_response_body_as_text (qq[</code></pre>]);
+        $app->http->send_response_body_as_text (scalar get_html_navigation ('../', $path->[0]));
+        $app->http->close_response_body;
+        return;
       }
-      print qq[</code></pre>], get_html_navigation ('../', $path[1]);
-      print qq[</body></html>];
-      exit;      
-    }    
-  } elsif ($path[2] eq 'prop.txt') {
-    if ($cgi->request_method eq 'PUT') {
-      lock_start ();
-      ## TODO: CONTENT_TYPE check
-      my $old_prop = get_prop_hash ($path[1]);
-      my $prop_text = Encode::decode ('utf8', $cgi->entity_body);
-      if (set_prop_text ($path[1], $prop_text, new_file => 0)) {
-        delete_from_maps ($path[1] => $old_prop);
-        my $prop = get_prop_hash ($path[1]);
-        update_maps ($path[1] => $prop);
-        print "Status: 201 Created\nContent-Type: text/plain\n\n201";
-        ## TODO: Is this status code OK?
-        close STDOUT;
-        commit_changes ();
+      
+    } elsif ($path->[1] eq 'prop.txt') {
+      # /{key}/prop.txt
+      if ($app->http->request_method eq 'PUT') {
+        lock_start ();
+        ## TODO: CONTENT_TYPE check
+        my $old_prop = get_prop_hash ($path->[0]);
+        my $prop_text = Encode::decode ('utf-8', ${$app->http->request_body_as_ref});
+        if (set_prop_text ($path->[0], $prop_text, new_file => 0)) {
+          delete_from_maps ($path->[0] => $old_prop);
+          my $prop = get_prop_hash ($path->[0]);
+          update_maps ($path->[0] => $prop);
+          $app->send_error (201);
+          commit_changes ();
+          return;
+        }
+      } else {
+        my $prop_text = get_prop_text ($path->[0]);
+        if (defined $prop_text) {
+          $app->send_plain_text ($prop_text);
+          return;
+        }
       }
-    } else {
-      my $prop_text = get_prop_text ($path[1]);
-      if (defined $prop_text) {
-        print "Content-Type: text/plain; charset=utf-8\n\n";
-        binmode STDOUT, ':utf8';
-        print $prop_text;
-        exit;
-      }
-    }
-  } elsif ($path[2] eq 'prop.html') {
-    my $prop = get_prop_hash ($path[1]);
-    if (keys %$prop) {
-      print "Content-Type: text/html; charset=utf-8\n\n";
-      binmode STDOUT, ':utf8';
+    } elsif ($path->[1] eq 'prop.html') {
+      # /{key}/prop.html
+      my $prop = get_prop_hash ($path->[0]);
+      if (keys %$prop) {
+        $app->http->set_response_header
+            ('Content-Type' => 'text/html; charset=utf-8');
 
-      my ($title_text, $title_lang) = get_title ($path[1]);
-      $title_text = htescape ($title_text);
-      $title_lang = htescape ($title_lang);
+        my ($title_text, $title_lang) = get_title ($path->[0]);
+        $title_text = htescape ($title_text);
+        $title_lang = htescape ($title_lang);
 
-      print qq[<!DOCTYPE HTML>
+        $app->http->send_response_body_as_text (qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title lang="$title_lang">Information on $title_text</title>
@@ -142,303 +155,293 @@ annotations cannot be shown.</div>
 </head>
 <body>
 <h1 lang="$title_lang">Information on $title_text</h1>
-];
+]);
 
-      my %keys = map {$_ => 1} keys %$prop;
+        my %keys = map {$_ => 1} keys %$prop;
 
-      print qq[<dl>];
+        $app->http->send_response_body_as_text (qq[<dl>]);
 
-      if ($prop->{uri}->[0]) {
-        print qq[<dt lang="en">URI</dt>];
-        for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{uri}}) {
-          my $uri = $v->[0];
-          my $etime = '';
-          if ($uri =~ s/<>(.*)$//s) {
-            $etime = htescape ($1);
-          }
-          my $euri = htescape ($uri);
-          my $elang = htescape ($v->[1]);
-          print qq[<dd><code class=uri lang="$elang">&lt;<a href="$euri">$euri</a>&gt;</code>];
-          
-          my $uri2 = $dom->create_uri_reference (q<../list/uri.html>);
-          $uri2->uri_query ($uri);
-          print qq[ [<a href="@{[htescape ($uri2->get_uri_reference->uri_reference)]}" lang="en">more</a>]];
-          
-          if (length $etime) {
-            print qq[ (<time>$etime</time>)];
-          }
-          print qq[</dd>];
-        }
-        delete $keys{uri};
-      }
-
-      if ($prop->{public_id}->[0]) {
-        print qq[<dt lang="en">Public Identifier</dt>];
-        for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{public_id}}) {
-          my $uri = $dom->create_uri_reference (q<../list/pubid.html>);
-          $uri->uri_query ($v->[0]);
-          my $elang = htescape ($v->[1]);
-          print qq[<dd><a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}"><code lang="@{[htescape ($v->[1])]}" class=public-id>@{[htescape ($v->[0])]}</code></a></dd>];
-        }
-        delete $keys{public_id};
-      }
-
-      if ($prop->{system_id}->[0]) {
-        print qq[<dt lang="en">System Identifier</dt>];
-        for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{system_id}}) {
-          my $uri = $v->[0];
-          if (defined $prop->{base_uri}->[0]) {
-            $uri = $dom->create_uri_reference ($uri)
-                ->get_absolute_reference
-                    ($prop->{base_uri}->[0]->[0])->uri_reference;
-          }
-          my $euri = htescape ($uri);
-          my $elang = htescape ($v->[1]);
-          print qq[<dd><code class=uri lang="$elang">&lt;<a href="$euri">@{[htescape ($v->[0])]}</a>&gt;</code>];
-          
-          my $uri2 = $dom->create_uri_reference (q<../list/uri.html>);
-          $uri2->uri_query ($uri);
-          print qq[ [<a href="@{[htescape ($uri2->get_uri_reference->uri_reference)]}" lang="en">more</a>]];
-          
-          print qq[</dd>];
-        }
-        delete $keys{system_id};
-      }
-
-      for ([tag => 'Tag']) {
-        my $key = $_->[0];
-        my $label = $_->[1];
-        if ($prop->{$key}) {
-          print qq[<dt lang="en" class="$key">$label</dt>];
-          for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{$key}}) {
-            my $uri = $dom->create_uri_reference (q<../list/tag.html>);
-            $uri->uri_query ($v->[0]);
-            my $elang = htescape ($v->[1]);
-            print qq[<dd class="$key"><a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}" lang="@{[htescape ($v->[1])]}">@{[htescape ($v->[0])]}</a></dd>];
-          }
-          delete $keys{$key};
-        }
-      }
-
-      for ([editor => 'Editor'], [editor_mail => 'Editor (mail)'],
-           [rcs_user => 'Editor (RCS)'],
-           [author => 'Author'], [author_mail => 'Author (mail)']) {
-        my $key = $_->[0];
-        my $label = $_->[1];
-        if ($prop->{$key}) {
-          print qq[<dt lang="en">$label</dt>];
-          for my $v (@{$prop->{$key}}) {
-            my $uri = $dom->create_uri_reference (q<../list/editor.html>);
-            $uri->uri_query ($v->[0]);
-            my $elang = htescape ($v->[1]);
-            print qq[<dd><a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}" lang="@{[htescape ($v->[1])]}">@{[htescape ($v->[0])]}</a></dd>];
-          }
-          delete $keys{$key};
-        }
-      }
-
-      for ([src => 'Source'],
-           [contains => 'Contains'],
-           [derived_from => 'Derived from'],
-           [ref => 'Reference'],
-           [documentation => 'Documentation'],
-           [related => 'Related file']) {
-        my $key = $_->[0];
-        my $label = $_->[1];
-        if ($prop->{$key}->[0]) {
-          print qq[<dt>], $label, q[</dt>];
-          for (@{$prop->{$key}}) {
-            my $v = $_->[0];
-            print qq[<dd><dl>];
-            for (split /\s*;\s*/, $v) {
-              my ($n, $v) = split /\s*:\s*/, $_, 2;
-              my $l = '';
-              if ($n =~ s/\@([^@]*)$//) {
-                $l = $1;
-              }
-              if ($n eq 'public_id') {
-                print qq[<dt>Public Identifier</dt><dd>];
-                my $uri = $dom->create_uri_reference (q<../list/pubid.html>);
-                $uri->uri_query ($v);
-                print qq[<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}"><code class=public-id lang="@{[htescape ($l)]}">@{[htescape ($v)]}</code></a></dd>];
-              } elsif ($n eq 'system_id' or $n eq 'uri') {
-                print qq[<dt>];
-                print {system_id => 'System Identifier',
-                       uri => 'URI'}->{$n};
-                print qq[</dt><dd>];
-                my $v_uri = $dom->create_uri_reference ($v);
-                if (defined $prop->{base_uri}->[0]) {
-                  $v_uri = $v_uri->get_absolute_reference
-                      ($prop->{base_uri}->[0]->[0]);
-                }
-                my $uri = $dom->create_uri_reference (q<../list/uri.html>);
-                $uri->uri_query ($v_uri->uri_reference);
-                print qq[<code class=uri lang="@{[htescape ($l)]}">&lt;<a href="@{[htescape ($uri->get_uri_reference->uri_reference)]}">@{[htescape ($v)]}</a>&gt;</code></dd>];
-              } elsif ($n eq 'digest') {
-                print qq[<dt>File</dt><dd>];
-                my ($title_text, $title_lang) = get_title ($v);
-                my $uri = $dom->create_uri_reference (q<../> . $v . q</prop.html>);
-                print qq[<a lang="@{[htescape ($title_lang)]}" href="@{[htescape ($uri->get_uri_reference->uri_reference)]}">@{[htescape ($title_text)]}</a>];
-                print qq[ [<a href="diff/@{[htescape ($v)]}.html">Diff</a>]];
-                print qq[</dd>];
-              } else {
-                print qq[<dt>], htescape ($n), qq[</dt>];
-                print qq[<dd lang="@{[htescape ($l)]}">], htescape ($v);
-                print qq[</dd>];
-              }
+        if ($prop->{uri}->[0]) {
+          $app->http->send_response_body_as_text (qq[<dt lang="en">URI</dt>]);
+          for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{uri}}) {
+            my $uri = $v->[0];
+            my $etime = '';
+            if ($uri =~ s/<>(.*)$//s) {
+              $etime = htescape ($1);
             }
-            print qq[</dl></dd>];
+            my $euri = htescape ($uri);
+            my $elang = htescape ($v->[1]);
+            $app->http->send_response_body_as_text (qq[<dd><code class=uri lang="$elang">&lt;<a href="$euri">$euri</a>&gt;</code>]);
+            
+            my $uri2 = q<../list/uri.html?> . percent_encode_c $uri;
+            $app->http->send_response_body_as_text (qq[ [<a href="@{[htescape ($uri2)]}" lang="en">more</a>]]);
+            
+            if (length $etime) {
+              $app->http->send_response_body_as_text (qq[ (<time>$etime</time>)]);
+            }
+            $app->http->send_response_body_as_text (qq[</dd>]);
           }
-          delete $keys{$key};
+          delete $keys{uri};
         }
-      }
 
-      for my $key (sort {$a cmp $b} keys %keys) {
-        next unless @{$prop->{$key}};
-        print qq[<dt>], htescape ($key), qq[</dt>];
-        for (@{$prop->{$key}}) {
-          print qq[<dd lang="@{[htescape ($_->[1])]}">],
-              htescape ($_->[0]), qq[</dd>\n];
-        }
-      }
-
-      print qq[<dt>MD5 Digest</dt><dd><code>$path[1]</code></dd>\n];
-      print qq[</dl>];
-
-      if (defined $prop->{content_type}->[0] and
-          ($prop->{content_type}->[0]->[0] eq 'application/zip' or
-           $prop->{content_type}->[0]->[0] =~ /\+zip$/)) {
-        print q[<form action=expand method=post><p><button type=submit>Expand</button></p></form>];
-      }
-
-      print scalar get_html_navigation ('../', $path[1]);
-      print qq[</body></html>];
-      exit;
-    }
-  } elsif ($path[2] eq 'propedit.html') {
-    print 'Location: ' . $cgi->script_name . "/../prop-edit\n\n";
-    exit;
-  } elsif ($path[2] eq 'expand') {
-    if ($cgi->request_method eq 'POST') {
-      lock_start ();
-      my $prop = get_prop_hash ($path[1]);
-      if (defined $prop->{content_type}->[0] and
-          ($prop->{content_type}->[0]->[0] eq 'application/zip' or
-           $prop->{content_type}->[0]->[0] =~ /\+zip$/)) {
-        my $prop = get_prop_hash ($path[1]);
-        my $file_name = get_file_name ($path[1]);
-        require Archive::Zip;
-        my $zip = Archive::Zip->new;
-        my $error_code = $zip->read($file_name);
-        if ($error_code == Archive::Zip::AZ_OK ()) {
-          print "Status: 201 Created\nContent-Type: text/html; charset=utf-8\n\n";
-          $| = 1;
-          print qq[<!DOCTYPE HTML><html lang=""><title>201 Created</title><ul>];
-          for my $member ($zip->members) {
-            next if $member->isDirectory;
-            my $ent = {};
-            $ent->{file_name} = $member->fileName;
-            $ent->{last_modified} = time_to_rfc3339 ($member->lastModTime);
-            $ent->{digest} = $path[1];
-            $ent->{s} = $member->contents;
-            my $digest = add_entity ($ent);
-            my $uri = '../'.$digest.q</prop.html>;
-            print qq[<li><a href="@{[htescape ($uri)]}"><code class=file>@{[htescape ($ent->{file_name})]}</code></a></li>];
-            add_prop ($prop, 'contains', 'digest:'.$digest, '');
+        if ($prop->{public_id}->[0]) {
+          $app->http->send_response_body_as_text (qq[<dt lang="en">Public Identifier</dt>]);
+          for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{public_id}}) {
+            my $uri = q<../list/pubid.html?> . percent_encode_c $v->[0];
+            my $elang = htescape ($v->[1]);
+            $app->http->send_response_body_as_text (qq[<dd><a href="@{[htescape ($uri)]}"><code lang="@{[htescape ($v->[1])]}" class=public-id>@{[htescape ($v->[0])]}</code></a></dd>]);
           }
-          print qq[</ul>];
-          set_prop_hash ($path[1], $prop);
-          close STDOUT;
-          commit_changes ();
-          exit;
+          delete $keys{public_id};
+        }
+
+        if ($prop->{system_id}->[0]) {
+          $app->http->send_response_body_as_text (qq[<dt lang="en">System Identifier</dt>]);
+          for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{system_id}}) {
+            my $uri = $v->[0];
+            if (defined $prop->{base_uri}->[0]) {
+              $uri = resolve_url $uri, $prop->{base_uri}->[0]->[0];
+            }
+            my $euri = htescape ($uri);
+            my $elang = htescape ($v->[1]);
+            $app->http->send_response_body_as_text (qq[<dd><code class=uri lang="$elang">&lt;<a href="$euri">@{[htescape ($v->[0])]}</a>&gt;</code>]);
+            
+            my $uri2 = q<../list/uri.html?> . percent_encode_c $uri;
+            $app->http->send_response_body_as_text (qq[ [<a href="@{[htescape ($uri2)]}" lang="en">more</a>]]);
+          }
+          delete $keys{system_id};
+        }
+
+        for ([tag => 'Tag']) {
+          my $key = $_->[0];
+          my $label = $_->[1];
+          if ($prop->{$key}) {
+            $app->http->send_response_body_as_text
+                (qq[<dt lang="en" class="$key">$label</dt>]);
+            for my $v (sort {$a->[0] cmp $b->[0]} @{$prop->{$key}}) {
+              my $uri = q<../list/tag.html?> . percent_encode_c $v->[0];
+              my $elang = htescape ($v->[1]);
+              $app->http->send_response_body_as_text (qq[<dd class="$key"><a href="@{[htescape ($uri)]}" lang="@{[htescape ($v->[1])]}">@{[htescape ($v->[0])]}</a></dd>]);
+            }
+            delete $keys{$key};
+          }
+        }
+
+        for ([editor => 'Editor'], [editor_mail => 'Editor (mail)'],
+             [rcs_user => 'Editor (RCS)'],
+             [author => 'Author'], [author_mail => 'Author (mail)']) {
+          my $key = $_->[0];
+          my $label = $_->[1];
+          if ($prop->{$key}) {
+            $app->http->send_response_body_as_text (qq[<dt lang="en">$label</dt>]);
+            for my $v (@{$prop->{$key}}) {
+              my $uri = q<../list/editor.html?> . percent_encode_c $v->[0];
+              my $elang = htescape ($v->[1]);
+              $app->http->send_response_body_as_text (qq[<dd><a href="@{[htescape ($uri)]}" lang="@{[htescape ($v->[1])]}">@{[htescape ($v->[0])]}</a></dd>]);
+            }
+            delete $keys{$key};
+          }
+        }
+
+        for ([src => 'Source'],
+             [contains => 'Contains'],
+             [derived_from => 'Derived from'],
+             [ref => 'Reference'],
+             [documentation => 'Documentation'],
+             [related => 'Related file']) {
+          my $key = $_->[0];
+          my $label = $_->[1];
+          if ($prop->{$key}->[0]) {
+            $app->http->send_response_body_as_text (qq[<dt>] . $label . q[</dt>]);
+            for (@{$prop->{$key}}) {
+              my $v = $_->[0];
+              $app->http->send_response_body_as_text (qq[<dd><dl>]);
+              for (split /\s*;\s*/, $v) {
+                my ($n, $v) = split /\s*:\s*/, $_, 2;
+                my $l = '';
+                if ($n =~ s/\@([^@]*)$//) {
+                  $l = $1;
+                }
+                if ($n eq 'public_id') {
+                  $app->http->send_response_body_as_text (qq[<dt>Public Identifier</dt><dd>]);
+                  my $uri = q<../list/pubid.html?> . percent_encode_c $v;
+                  $app->http->send_response_body_as_text (qq[<a href="@{[htescape ($uri)]}"><code class=public-id lang="@{[htescape ($l)]}">@{[htescape ($v)]}</code></a></dd>]);
+                } elsif ($n eq 'system_id' or $n eq 'uri') {
+                  $app->http->send_response_body_as_text (qq[<dt>]);
+                  $app->http->send_response_body_as_text
+                      ({system_id => 'System Identifier',
+                        uri => 'URI'}->{$n});
+                  $app->http->send_response_body_as_text (qq[</dt><dd>]);
+                  my $v_uri = resolve_url $v, $prop->{base_uri}->[0] ? $prop->{base_uri}->[0]->[0] : undef;
+                  my $uri = q<../list/uri.html?> . percent_encode_c $v_uri;
+                  $app->http->send_response_body_as_text (qq[<code class=uri lang="@{[htescape ($l)]}">&lt;<a href="@{[htescape ($uri)]}">@{[htescape ($v)]}</a>&gt;</code></dd>]);
+                } elsif ($n eq 'digest') {
+                  $app->http->send_response_body_as_text (qq[<dt>File</dt><dd>]);
+                  my ($title_text, $title_lang) = get_title ($v);
+                  my $uri = q<../> . $v . q</prop.html>;
+                  $app->http->send_response_body_as_text (qq[<a lang="@{[htescape ($title_lang)]}" href="@{[htescape ($uri)]}">@{[htescape ($title_text)]}</a>]);
+                  $app->http->send_response_body_as_text (qq[ [<a href="diff/@{[htescape ($v)]}.html">Diff</a>]]);
+                } else {
+                  $app->http->send_response_body_as_text (qq[<dt>] . htescape ($n));
+                  $app->http->send_response_body_as_text (qq[<dd lang="@{[htescape ($l)]}">] . htescape ($v));
+                }
+              }
+              $app->http->send_response_body_as_text (qq[</dl></dd>]);
+            }
+            delete $keys{$key};
+          }
+        }
+
+        for my $key (sort {$a cmp $b} keys %keys) {
+          next unless @{$prop->{$key}};
+          $app->http->send_response_body_as_text (qq[<dt>] . htescape ($key));
+          for (@{$prop->{$key}}) {
+            $app->http->send_response_body_as_text (qq[<dd lang="@{[htescape ($_->[1])]}">]);
+            $app->http->send_response_body_as_text (htescape ($_->[0]));
+          }
+        }
+
+        $app->http->send_response_body_as_text (qq[<dt>MD5 Digest</dt><dd><code>$path->[0]</code></dd>\n]);
+        $app->http->send_response_body_as_text (qq[</dl>]);
+
+        if (defined $prop->{content_type}->[0] and
+            ($prop->{content_type}->[0]->[0] eq 'application/zip' or
+             $prop->{content_type}->[0]->[0] =~ /\+zip$/)) {
+          $app->http->send_response_body_as_text (q[<form action=expand method=post><p><button type=submit>Expand</button></p></form>]);
+        }
+
+        $app->http->send_response_body_as_text (scalar get_html_navigation ('../', $path->[0]));
+        $app->http->close_response_body;
+        return;
+      }
+    } elsif ($path->[1] eq 'propedit.html') {
+      # /{key}/propedit.html
+      $app->http->set_response_header
+          ('Content-Type' => 'text/html; charset=utf-8');
+      my $f = file (__FILE__)->dir->file ('prop-edit.en.html');
+      $app->http->send_response_body_as_ref (\scalar $f->slurp);
+      $app->http->close_response_body;
+      return;
+    } elsif ($path->[1] eq 'expand') {
+      # /{key}/expand
+      if ($app->http->request_method eq 'POST') {
+        lock_start ();
+        my $prop = get_prop_hash ($path->[0]);
+        if (defined $prop->{content_type}->[0] and
+            ($prop->{content_type}->[0]->[0] eq 'application/zip' or
+             $prop->{content_type}->[0]->[0] =~ /\+zip$/)) {
+          my $prop = get_prop_hash ($path->[0]);
+          my $file_name = get_file_name ($path->[0]);
+          require Archive::Zip;
+          my $zip = Archive::Zip->new;
+          my $error_code = $zip->read($file_name);
+          if ($error_code == Archive::Zip::AZ_OK ()) {
+            $app->http->set_status (201);
+            $app->http->set_response_header
+                ('Content-Type' => 'text/html; charset=utf-8');
+            $app->http->send_response_body_as_text
+                (qq[<!DOCTYPE HTML><html lang=""><title>201 Created</title><ul>]);
+            for my $member ($zip->members) {
+              next if $member->isDirectory;
+              my $ent = {};
+              $ent->{file_name} = $member->fileName;
+              $ent->{last_modified} = time_to_rfc3339 ($member->lastModTime);
+              $ent->{digest} = $path->[0];
+              $ent->{s} = $member->contents;
+              my $digest = add_entity ($ent);
+              my $uri = '../'.$digest.q</prop.html>;
+              $app->http->send_response_body_as_text (qq[<li><a href="@{[htescape ($uri)]}"><code class=file>@{[htescape ($ent->{file_name})]}</code></a></li>]);
+              add_prop ($prop, 'contains', 'digest:'.$digest, '');
+            }
+            $app->http->send_response_body_as_text (qq[</ul>]);
+            set_prop_hash ($path->[0], $prop);
+            $app->http->close_response_body;
+            commit_changes ();
+            return;
+          } else {
+            return $app->send_error (400, reason_phrase => "Not expandable ($error_code)");
+          }
         } else {
-          print "Status: 400 Not expandable\nContent-Type: text/plain\n\n400 ($error_code)";
-          exit;
+          return $app->send_error (400);
         }
       } else {
-        print "Status: 400 Not expandable\nContent-Type: text/plain\n\n400";
-        exit;
+        return $app->send_error (405);
       }
-    } else {
-      print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
-      exit;
-    }
-  } elsif ($path[2] eq 'annotation.txt') {
-    if ($cgi->request_method eq 'POST') {
-      print "Content-Type: text/plain; charset=us-ascii\n\n";
-      print time . (int (rand (10)), int (rand (10)), int (rand (10)));
-      exit;
-    } else {
-      my $prop = get_prop_hash ($path[1]);
-      print "Content-Type: text/plain; charset=utf-8\n";
-      binmode STDOUT, ':utf8';
-      print "\n";
-      for (@{$prop->{an} or []}) {
-        print $_->[0], "\n";
-      }
-      exit;
-    }
-  }
-} elsif (@path == 4 and $path[0] eq '' and $path[1] =~ /\A[0-9a-f]+\z/) {
-  if ($path[2] eq 'annotation' and $path[3] =~ /\A([0-9A-Za-z]+)\.txt\z/) {
-    my $id = $1;
-    if ($cgi->request_method eq 'PUT') {
-      lock_start ();
-      my $prop = get_prop_hash ($path[1]);
-      for my $v (@{$prop->{an} or []}) {
-        if ($v->[0] =~ /^\Q$id\E(?>$|\t)/) {
-          ## TODO: Check CONTENT_TYPE
-          $v->[0] = Encode::decode ('utf8', $cgi->entity_body);
-          set_prop_hash ($path[1], $prop);
-          print "Status: 201 Created\nContent-Type: text/plain\n\n201";
-          close STDOUT;
-          commit_changes ();
-          exit; ## TODO: 201?
+
+    } elsif ($path->[1] eq 'annotation.txt') {
+      # /{key}/annotation.txt
+      if ($app->http->request_method eq 'POST') {
+        $app->http->send_plain_text (time . (int (rand (10)), int (rand (10)), int (rand (10))));
+        return;
+      } else {
+        my $prop = get_prop_hash ($path->[0]);
+        $app->http->set_response_header
+            ('Content-Type' => 'text/plain; charset=utf-8');
+        for (@{$prop->{an} or []}) {
+          $app->http->send_response_body_as_text ($_->[0] . "\n");
         }
+        $app->http->close_response_body;
+        return;
       }
-      push @{$prop->{an} ||= []},
-          [Encode::decode ('utf8', $cgi->entity_body), ''];
-      set_prop_hash ($path[1], $prop);
-      print "Status: 201 Created\nContent-Type: text/plain\n\n201";
-      close STDOUT;
-      commit_changes ();
-      exit;
-    } else {
-      print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
-      exit;
     }
-  } elsif ($path[2] eq 'annotation' and $path[3] =~ /\A[0-9A-Za-z]+\z/) {
-    if ($cgi->request_method eq 'DELETE') {
-      lock_start ();
-      my $prop = get_prop_hash ($path[1]);
-      for my $i (0..$#{$prop->{an} or []}) {
-        my $v = $prop->{an}->[$i];
-        if ($v->[0] =~ /^\Q$path[3]\E(?>$|\t)/) {
-          splice @{$prop->{an}}, $i, 1, ();
-          set_prop_hash ($path[1], $prop);
-          print "Status: 200 Deleted\nContent-Type: text/plain\n\n200";
-          close STDOUT;
-          commit_changes ();
-          exit; ## TODO: 200?
+
+  } elsif (@$path == 3 and $path->[0] =~ /\A[0-9a-f]+\z/) {
+    if ($path->[1] eq 'annotation' and
+        $path->[2] =~ /\A([0-9A-Za-z]+)\.txt\z/) {
+      # /{key}/annotation/{id}.txt
+      my $id = $1;
+      if ($app->http->request_method eq 'PUT') {
+        lock_start ();
+        my $prop = get_prop_hash ($path->[0]);
+        for my $v (@{$prop->{an} or []}) {
+          if ($v->[0] =~ /^\Q$id\E(?>$|\t)/) {
+            ## TODO: Check CONTENT_TYPE
+            $v->[0] = Encode::decode ('utf-8', ${$app->http->request_body_as_ref});
+            set_prop_hash ($path->[0], $prop);
+            $app->send_error (201);
+            commit_changes ();
+            return;
+          }
         }
+        push @{$prop->{an} ||= []},
+            [Encode::decode ('utf-8', ${$app->http->request_body_as_ref}), ''];
+        set_prop_hash ($path->[0], $prop);
+        $app->send_error (201);
+        commit_changes ();
+        return;
+      } else {
+        return $app->send_error (405);
       }
-      print "Status: 200 Deleted\nContent-Type: text/plain\n\n200";
-      exit; ## TODO: 200
-    } else {
-      print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
-      exit;
-    }
-  } elsif ($path[2] eq 'diff' and $path[3] =~ /\A([0-9a-f]+)\.html\z/) {
-    my $digest = $1;
-    ## TODO: charset
-    my $from_text = [split /\x0D?\x0A/, get_file_text ($digest)];
-    my $to_text = [split /\x0D?\x0A/, get_file_text ($path[1])];
-    my $etitlea = htescape (get_title ($digest));
-    my $etitleb = htescape (get_title ($path[1]));
-    print "Content-Type: text/html; charset=utf-8\n\n";
-    binmode STDOUT, ':utf8';
-    $| = 1;
-    print qq[<!DOCTYPE HTML>
+    } elsif ($path->[1] eq 'annotation' and $path->[2] =~ /\A[0-9A-Za-z]+\z/) {
+      # /{key}/annotation/{id}
+      if ($app->http->request_method eq 'DELETE') {
+        lock_start ();
+        my $prop = get_prop_hash ($path->[0]);
+        for my $i (0..$#{$prop->{an} or []}) {
+          my $v = $prop->{an}->[$i];
+          if ($v->[0] =~ /^\Q$path->[2]\E(?>$|\t)/) {
+            splice @{$prop->{an}}, $i, 1, ();
+            set_prop_hash ($path->[0], $prop);
+            $app->http->set_status (200, reason_phrase => 'Deleted');
+            commit_changes ();
+            return;
+          }
+        }
+        $app->http->set_status (200, reason_phrase => 'Deleted');
+        return
+      } else {
+        return $app->send_error (405);
+      }
+    } elsif ($path->[1] eq 'diff' and $path->[2] =~ /\A([0-9a-f]+)\.html\z/) {
+      # /{key}/diff/{key}.html
+      my $digest = $1;
+      ## TODO: charset
+      my $from_text = [split /\x0D?\x0A/, get_file_text ($digest)];
+      my $to_text = [split /\x0D?\x0A/, get_file_text ($path->[0])];
+      my $etitlea = htescape (get_title ($digest));
+      my $etitleb = htescape (get_title ($path->[0]));
+      $app->http->set_response_header
+          ('Content-Type' => 'text/html; charset=utf-8');
+      $app->http->send_response_body_as_text (qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title>Diff between "$etitlea" and "$etitleb"</title>
@@ -449,34 +452,37 @@ annotations cannot be shown.</div>
 <a href="../../@{[htescape ($digest)]}/prop.html"><cite>$etitlea</cite></a> and 
 <a href="../prop.html"><cite>$etitleb</cite></a></h1>
 
-<pre><code>];
-    require Algorithm::Diff;
-    my $diff = Algorithm::Diff->new ($from_text, $to_text);
-    while ($diff->Next) {
-      if ($diff->Same) {
-        print qq[<span class=line>], htescape ($_), qq[</span>\n]
-            for $diff->Items (1);
-      } else {
-        print qq[<del><span class=line>], htescape ($_), qq[</span></del>\n]
-            for $diff->Items (1);
-        print qq[<ins><span class=line>], htescape ($_), qq[</span></ins>\n]
-            for $diff->Items (2);
+<pre><code>]);
+      require Algorithm::Diff;
+      my $diff = Algorithm::Diff->new ($from_text, $to_text);
+      while ($diff->Next) {
+        if ($diff->Same) {
+          $app->http->send_response_body_as_text
+              (qq[<span class=line>] . htescape ($_) . qq[</span>\n])
+                  for $diff->Items (1);
+        } else {
+          $app->http->send_response_body_as_text
+              (qq[<del><span class=line>] . htescape ($_) . qq[</span></del>\n])
+                  for $diff->Items (1);
+          $app->http->send_response_body_as_text
+              (qq[<ins><span class=line>] . htescape ($_) . qq[</span></ins>\n])
+                  for $diff->Items (2);
+        }
       }
-    }
 
-    my $no_sync_pattern = qr/
-      charset|content_type|
-      base_uri|uri|
-      derived_from|src|
-      documentation|documentation_uri|
-      last_modified|modified_in_content|
-      rcs_date|rcs_revision|rcs_user|
-      label
-    /x;
+      my $no_sync_pattern = qr/
+        charset|content_type|
+        base_uri|uri|
+        derived_from|src|
+        documentation|documentation_uri|
+        last_modified|modified_in_content|
+        rcs_date|rcs_revision|rcs_user|
+        label
+      /x;
 
-    my $edigest_old = htescape ($digest);
-    my $edigest_new = htescape ($path[1]);
-    print qq[
+      my $edigest_old = htescape ($digest);
+      my $edigest_new = htescape ($path->[9]);
+      $app->http->send_response_body_as_text (qq[
       </code></pre>
       
       <details id=diff-props>
@@ -489,43 +495,48 @@ annotations cannot be shown.</div>
       <tr><th><a href="../../$edigest_old/prop.html"><cite>$etitlea</cite></a>
       <th><a href="../prop.html"><cite>$etitleb</cite></a>
 
-      <tbody>];
-    
-    my $from_prop_text = [grep {length $_}
+      <tbody>]);
+      
+      my $from_prop_text = [grep {length $_}
+                            split /\x0D?\x0A/,
+                            get_normalized_prop_text ($digest)];
+      my $to_prop_text = [grep {length $_}
                           split /\x0D?\x0A/,
-                          get_normalized_prop_text ($digest)];
-    my $to_prop_text = [grep {length $_}
-                        split /\x0D?\x0A/,
-                        get_normalized_prop_text ($path[1])];
-    my $diff = Algorithm::Diff->new ($from_prop_text, $to_prop_text);
-    while ($diff->Next) {
-      if ($diff->Same) {
-        print qq[<tr><td colspan=2><code>], htescape ($_), q[</code>]
-            for $diff->Items (1);
-      } else {
-        for ($diff->Items (1)) {
-          my $ev = htescape ($_);
-          print qq[<tr><td><del><code>$ev</code></del>];
-          my $checked = $ev =~ /^(?:$no_sync_pattern)[\@:]/ ? '' : 'checked';
-          print qq[<td><label><input type=checkbox name=prop-new value="$ev"
-                   $checked> Add this property</label>];
-        }
-        for ($diff->Items (2)) {
-          my $ev = htescape ($_);
-          my $checked = $ev =~ /^(?:$no_sync_pattern)[\@:]/ ? '' : 'checked';
-          print qq[<tr><td><label><input type=checkbox name=prop-old
-                   value="$ev" $checked> Add this property</label>];
-          print qq[<td><ins><code>$ev</code></ins>];
+                          get_normalized_prop_text ($path->[0])];
+      my $diff = Algorithm::Diff->new ($from_prop_text, $to_prop_text);
+      while ($diff->Next) {
+        if ($diff->Same) {
+          $app->http->send_response_body_as_text
+              (qq[<tr><td colspan=2><code>] . htescape ($_) . q[</code>])
+                  for $diff->Items (1);
+        } else {
+          for ($diff->Items (1)) {
+            my $ev = htescape ($_);
+            $app->http->send_response_body_as_text
+                (qq[<tr><td><del><code>$ev</code></del>]);
+            my $checked = $ev =~ /^(?:$no_sync_pattern)[\@:]/ ? '' : 'checked';
+            $app->http->send_response_body_as_text
+                (qq[<td><label><input type=checkbox name=prop-new value="$ev"
+                   $checked> Add this property</label>]);
+          }
+          for ($diff->Items (2)) {
+            my $ev = htescape ($_);
+            my $checked = $ev =~ /^(?:$no_sync_pattern)[\@:]/ ? '' : 'checked';
+            $app->http->send_response_body_as_text
+                (qq[<tr><td><label><input type=checkbox name=prop-old
+                   value="$ev" $checked> Add this property</label>]);
+            $app->http->send_response_body_as_text
+                (qq[<td><ins><code>$ev</code></ins>]);
+          }
         }
       }
-    }
 
-    print qq[
+      $app->http->send_response_body_as_text (qq[
       <tfoot>
   
       <tr>
       <td><label><input type=checkbox name=prop-old
-          value="derived_from:digest:@{[htescape ($path[1])]}">
+          value="derived_from:digest:@{[htescape ($path->[0])]}">
       Add <code>derived_from</code> property (&lt;-)</label>
       <td><label><input type=checkbox name=prop-new
           value="derived_from:digest:@{[htescape ($digest)]}" checked>
@@ -546,332 +557,297 @@ annotations cannot be shown.</div>
 
       </details>
       <nav>[<a href="../../$edigest_old/diff/$edigest_new.html"
-          >Reverse</a>]</nav>];
-    print '', get_html_navigation ('../../', $path[1]);
-    exit;
-  } elsif ($path[2] eq 'diff-sync' and $path[3] =~ /\A[0-9a-f]+\z/) {
-    if ($cgi->request_method eq 'POST') {
-      lock_start ();
-      my $dir = $cgi->get_parameter ('prop-sync') // '';
-      my $digest = $dir eq 'old-to-new' ? $path[1] : $path[3];
-      my $prop = get_prop_hash ($digest);
-      delete_from_maps ($digest, $prop);
-      for ($cgi->get_parameter
-               ($dir eq 'old-to-new' ? 'prop-new' : 'prop-old')) {
-        my ($n, $v) = split /\s*:\s*/, Encode::decode ('utf-8', $_), 2;
-        my $lang = '';
-        if ($n =~ s/\@([^@]*)$//) {
-          $lang = $1;
+          >Reverse</a>]</nav>]);
+      $app->http->send_response_body_as_text (scalar get_html_navigation ('../../', $path->[0]));
+      $app->http->close_response_body;
+      return;
+    } elsif ($path->[1] eq 'diff-sync' and $path->[2] =~ /\A[0-9a-f]+\z/) {
+      # /{key}/diff-sync/{key}
+      if ($app->http->request_method eq 'POST') {
+        lock_start ();
+        my $dir = $app->text_param ('prop-sync') // '';
+        my $digest = $dir eq 'old-to-new' ? $path->[0] : $path->[2];
+        my $prop = get_prop_hash ($digest);
+        delete_from_maps ($digest, $prop);
+        for (@{$app->text_param_list
+                   ($dir eq 'old-to-new' ? 'prop-new' : 'prop-old')}) {
+          my ($n, $v) = split /\s*:\s*/, Encode::decode ('utf-8', $_), 2;
+          my $lang = '';
+          if ($n =~ s/\@([^@]*)$//) {
+            $lang = $1;
+          }
+          add_prop ($prop, $n, $v, $lang);
         }
-        add_prop ($prop, $n, $v, $lang);
-      }
-      set_prop_hash ($digest, $prop);
-      update_maps ($digest, $prop);
-      print "Status: 204 Properties Updated\n\n";
-      close STDOUT;
-      commit_changes ();
-      exit;
-    } else {
-      print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
-      exit;
-    }
-  }
-} elsif (@path == 2 and $path[0] eq '' and $path[1] eq '') {
-  if ($cgi->request_method eq 'POST') {
-    lock_start ();
-    my $s = $cgi->get_parameter ('s');
-    my $uri = $cgi->get_parameter ('uri');
-    my $ent;
-    if (defined $s) {
-      $ent->{digest} = $cgi->get_parameter ('digest');
-      if ((not defined $ent->{digest} or not length $ent->{digest}) and
-          defined $uri) {
-        my $containing_ent = get_remote_entity ($uri);
-        $ent->{digest} = add_entity ($containing_ent);
-      }
-      $ent->{s} = $s; ## TODO: charset
-      $ent->{charset} = 'utf-8';
-      $ent->{documentation} = 'uri:'.$uri;
-    } elsif (defined $uri) {
-      $ent = get_remote_entity ($uri);
-      $ent->{digest} = $cgi->get_parameter ('digest');
-    }
-
-    if (defined $ent) {
-      if (defined $ent->{s}) {
-        my $digest = add_entity ($ent);
-
-        print "Status: 201 Created\n";
-        print "Content-Type: text/html; charset=iso-8859-1\n";
-        my $uri = $dom->create_uri_reference ($digest . q</prop.html>)
-            ->get_absolute_reference ($cgi->request_uri)
-            ->get_uri_reference
-            ->uri_reference;
-        print "Location: $uri\n";
-        print "\n";
-        my $euri = htescape ($uri);
-        print qq[<a href="$euri">$euri</a>];
-        close STDOUT;
+        set_prop_hash ($digest, $prop);
+        update_maps ($digest, $prop);
+        $app->set_status (204, reason_phrase => 'Properties updated');
+        $app->http->close_response_body;
         commit_changes ();
-        exit;
+        return;
       } else {
-        print "Status: 400 Specified URI cannot be dereferenced\n";
-        print "Content-Type: text/plain; charset=iso-8859-1\n\n";
-        print "Specified URI Cannot Be Dereferenced\n";
-        print "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n";
-        for my $key (sort {$a cmp $b} keys %$ent) {
-          print $key, "\t", $ent->{$key}, "\n";
-        }
-        exit;
+        return $app->send_error (405);
       }
-    } else {
-      print "Status: 400 No uri Parameter Specified\n";
-      print "Content-Type: text/plain\n\n400";
-      exit;
     }
-  } else {
-    print "Status: 405 Method Not Allowed\nContent-Type: text/plain\n\n405";
-    exit;
-  }
-} elsif (@path == 3 and $path[0] eq '' and $path[1] eq 'list') {
-  if ($path[2] eq 'uri.html') {
-    print "Content-Type: text/html; charset=utf-8\n\n";
-    binmode STDOUT, ':utf8';
-    $| = 1;
     
-    my $query = $cgi->query_string;
-    my $prefix = '';
-    
-    if (defined $query and length $query) {
-      $query = '?' . $query;
-      my $turi = $dom->create_uri_reference ($query)
-          ->get_iri_reference
-          ->uri_query;
-      $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
-      $prefix = $turi;
-      my $eturi = htescape ($turi);
+  } elsif (@$path == 1 and $path->[0] eq '') {
+    # /
+    if ($app->http->request_method eq 'POST') {
+      lock_start ();
+      my $s = $app->text_param ('s');
+      my $uri = $app->text_param ('uri');
+      my $ent;
+      if (defined $s) {
+        $ent->{digest} = $app->bare_param ('digest');
+        if ((not defined $ent->{digest} or not length $ent->{digest}) and
+            defined $uri) {
+          my $containing_ent = get_remote_entity ($uri);
+          $ent->{digest} = add_entity ($containing_ent);
+        }
+        $ent->{s} = $s; ## TODO: charset
+        $ent->{charset} = 'utf-8';
+        $ent->{documentation} = 'uri:'.$uri;
+      } elsif (defined $uri) {
+        $ent = get_remote_entity ($uri);
+        $ent->{digest} = $app->bare_param ('digest');
+      }
+
+      if (defined $ent) {
+        if (defined $ent->{s}) {
+          my $digest = add_entity ($ent);
+          $app->http->set_status (201);
+          my $uri = $digest . q</prop.html>;
+          $app->http->set_response_header (Location => $uri);
+          my $euri = htescape ($uri);
+          $app->http->send_response_body_as_text
+              (qq[<a href="$euri">$euri</a>]);
+          $app->http->close_response_body;
+          commit_changes ();
+          return;
+        } else {
+          $app->http->set_status (400);
+          $app->http->set_response_header
+              ('Content-Type' => 'text/plain; charset=utf-8');
+          $app->http->send_response_body_as_text
+              ("Specified URI Cannot Be Dereferenced\n");
+          for my $key (sort {$a cmp $b} keys %$ent) {
+            $app->http->send_response_body_as_text
+                ($key . "\t" . $ent->{$key} . "\n");
+          }
+          $app->http->close_response_body;
+          return;
+        }
+      } else {
+        return $app->send_error (400, reason_phrase => 'No |uri|');
+      }
+    } else { # GET
+      return $app->throw_error (405);
+    }
+
+  } elsif (@$path == 2 and $path->[0] eq 'list') {
+    if ($path->[1] eq 'uri.html') {
+      # /list/uri.html
+      $app->http->set_response_header
+          ('Content-Type' => 'text/html; charset=utf-8');
       
-      print qq[<!DOCTYPE HTML>
+      my $query = $app->http->url->{query};
+      my $prefix = '';
+      
+      if (defined $query and length $query) {
+        $prefix = my $turi = percent_decode_c $query;
+        my $eturi = htescape ($turi);
+        
+        $app->http->send_response_body_as_text (qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title>Entries Associated with &lt;$eturi&gt;</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<link rel=stylesheet href="/schema-style">
 </head>
 <body>
 <h1>Entries Associated with <code>&lt;$eturi&gt;</code></h1>
-<ul>];
+<ul>]);
 
-      my $uri_to_entity = get_map ('uri_to_entity')->{$turi};
-      for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
-        my $uri2 = $dom->create_uri_reference
-          (q<../> . $digest . q</prop.html>);
-        my $euri2 = htescape ($uri2);
-        my ($title_text, $title_lang) = get_title ($digest);
-        print qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>];
-      }
-      print qq[</ul><form action="../" method=post accept-charset=utf-8>
+        my $uri_to_entity = get_map ('uri_to_entity')->{$turi};
+        for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
+          my $uri2 = q<../> . $digest . q</prop.html>;
+          my $euri2 = htescape ($uri2);
+          my ($title_text, $title_lang) = get_title ($digest);
+          $app->http->send_response_body_as_text (qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>]);
+        }
+        $app->http->send_response_body_as_text (qq[</ul><form action="../" method=post accept-charset=utf-8>
         <p><button type=submit>Retrieve latest entity</button>
         <input type=hidden name=uri value="$eturi"></p>
-      </form>];
-    } else {
-      print qq[<!DOCTYPE HTML>
+      </form>]);
+      } else {
+        $app->http->send_response_body_as_text (qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title>List of URIs</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<link rel=stylesheet href="/schema-style">
 </head>
-<body>];
-    }
-    
-    print qq[<h1>List of URIs</h1><ul>];
+<body>]);
+      }
       
-    my $lprefix = length $prefix;
-    my $uri_list = get_map ('uri_to_entity');
-    my $puri = '';
-    for my $uri (sort {$a cmp $b}
-                 grep {m!^(?:http://(?:web\.archive\.org/web|replay\.waybackmachine\.org)/[0-9]+/)?\Q$prefix\E!}
-                 keys %$uri_list) {
-      $uri =~ s!^((?:http://(?:web\.archive\.org/web|replay\.waybackmachine\.org)/[0-9]+/)?\Q$prefix\E.+?/+)[^/].*$!$1!;
-      next if $uri eq $puri;
-      $puri = $uri;
-      my $euri = htescape ($uri);
-      my $uri2 = $dom->create_uri_reference (q<uri.html>);
-      $uri =~ s/([%\\\|<>`])/sprintf '%%%02X', ord $1/ge; # TODO: ...
-      $uri2->uri_query ($uri);
-      my $euri2 = htescape ($uri2);
-      print qq[<li><code class=uri lang=en>&lt;<a href="$euri2">$euri</a>&gt;</code></li>];
-    }
-    print qq[</ul>];
-   
-    print scalar get_html_navigation ('../', undef);
-    print qq[</body></html>];
-    exit;
-  } elsif ($path[2] eq 'pubid.html') {
-    my $query = $cgi->query_string;
-    
-    if (defined $query and length $query) {
-      print "Content-Type: text/html; charset=utf-8\n";
-      binmode STDOUT, ':utf8';
-      print "\n";
+      $app->http->send_response_body_as_text (qq[<h1>List of URIs</h1><ul>]);
       
-      $query = '?' . $query;
-      my $turi = $dom->create_uri_reference ($query)
-          ->get_iri_reference
-          ->uri_query;
-      $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
-      my $eturi = htescape ($turi);
+      my $lprefix = length $prefix;
+      my $uri_list = get_map ('uri_to_entity');
+      my $puri = '';
+      for my $uri (sort {$a cmp $b}
+                   grep {m!^(?:http://(?:web\.archive\.org/web|replay\.waybackmachine\.org)/[0-9]+/)?\Q$prefix\E!}
+                   keys %$uri_list) {
+        $uri =~ s!^((?:http://(?:web\.archive\.org/web|replay\.waybackmachine\.org)/[0-9]+/)?\Q$prefix\E.+?/+)[^/].*$!$1!;
+        next if $uri eq $puri;
+        $puri = $uri;
+        my $euri = htescape ($uri);
+        my $uri2 = q<uri.html?> . percent_encode_c $uri;
+        my $euri2 = htescape ($uri2);
+        $app->http->send_response_body_as_text (qq[<li><code class=uri lang=en>&lt;<a href="$euri2">$euri</a>&gt;</code></li>]);
+      }
+      $app->http->send_response_body_as_text (qq[</ul>]);
       
-      print qq[<!DOCTYPE HTML>
+      $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+      $app->http->send_response_body_as_text (qq[</body></html>]);
+      $app->http->close_response_body;
+      return;
+
+    } elsif ($path->[1] eq 'pubid.html') {
+      # /list/pubid.html
+      $app->http->set_response_header
+          ('Content-Type' => 'text/html; charset=utf-8');
+      my $query = $app->http->url->{query};
+      if (defined $query and length $query) {
+        my $turi = percent_decode_c $query;
+        my $eturi = htescape ($turi);
+        $app->http->send_response_body_as_text (qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title>Entries Associated with "$eturi"</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<link rel=stylesheet href="/schema-style">
 </head>
 <body>
 <h1>Entries Associated with <code>$eturi</code></h1>
-<ul>];
+<ul>]);
 
-      my $uri_to_entity = get_map ('pubid_to_entity')->{$turi};
-      for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
-        my $uri2 = $dom->create_uri_reference
-            (q<../> . $digest . q</prop.html>);
-        my $euri2 = htescape ($uri2);
-        my ($title_text, $title_lang) = get_title ($digest);
-        print qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>];
-      }
-      print qq[</ul>], get_html_navigation ('../', undef);
-      print qq[</body></html>];
-      exit;
-    } else {
-      print "Content-Type: text/html; charset=utf-8\n";
-      binmode STDOUT, ':utf8';
-      print "\n";
-      print qq[<!DOCTYPE HTML>
+        my $uri_to_entity = get_map ('pubid_to_entity')->{$turi};
+        for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
+          my $uri2 = q<../> . $digest . q</prop.html>;
+          my $euri2 = htescape ($uri2);
+          my ($title_text, $title_lang) = get_title ($digest);
+          $app->http->send_response_body_as_text (qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>]);
+        }
+        $app->http->send_response_body_as_text (qq[</ul>]);
+        $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->send_response_body_as_text (qq[</body></html>]);
+        $app->http->close_response_body;
+        return;
+      } else { # no query
+        $app->http->send_response_body_as_text (qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title>List of Public Identifiers</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<link rel=stylesheet href="/schema-style">
 </head>
 <body>
 <h1>List of Public Identifiers</h1>
-<ul>];
+<ul>]);
 
-      my $uri_list = get_map ('pubid_to_entity');
-      for (sort {$a cmp $b} keys %$uri_list) {
-        my $euri = htescape ($_);
-        my $uri2 = $dom->create_uri_reference
-            (q<pubid.html>);
-        $uri2->uri_query ($_);
-        my $euri2 = htescape ($uri2);
-        print qq[<li><a href="$euri2"><code lang=en class=public-id>$euri</code></a></li>];
+        my $uri_list = get_map ('pubid_to_entity');
+        for (sort {$a cmp $b} keys %$uri_list) {
+          my $euri = htescape ($_);
+          my $uri2 = q<pubid.html?> . percent_encode_c $_;
+          my $euri2 = htescape ($uri2);
+          $app->http->send_response_body_as_text (qq[<li><a href="$euri2"><code lang=en class=public-id>$euri</code></a></li>]);
+        }
+        $app->http->send_response_body_as_text (qq[</ul>]);
+        $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->close_response_body;
+        return;
       }
-      print qq[</ul>], get_html_navigation ('../', undef);
-      print qq[</body></html>];
-      exit;
-    }
-  } elsif ($path[2] eq 'editor.html') {
-    my $query = $cgi->query_string;
-    
-    if (defined $query and length $query) {
-      print "Content-Type: text/html; charset=utf-8\n";
-      binmode STDOUT, ':utf8';
-      print "\n";
-      
-      $query = '?' . $query;
-      my $turi = $dom->create_uri_reference ($query)
-          ->get_iri_reference
-          ->uri_query;
-      $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
-      my $eturi = htescape ($turi);
-      
-      print qq[<!DOCTYPE HTML>
+
+    } elsif ($path->[1] eq 'editor.html') {
+      # /list/editor.html
+      my $query = $app->http->url->{query};
+      $app->http->set_response_header
+          ('Content-Type' => 'text/html; charset=utf-8');
+      if (defined $query and length $query) {
+        my $turi = percent_decode_c $query;
+        my $eturi = htescape ($turi);
+        $app->http->send_response_body_as_text (qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title>Entries Associated with $eturi</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<link rel=stylesheet href="/schema-style">
 </head>
 <body>
 <h1>Entries Associated with $eturi</h1>
-<ul>];
+<ul>]);
 
-      my $uri_to_entity = get_map ('editor_to_entity')->{$turi};
-      for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
-        my $uri2 = $dom->create_uri_reference
-            (q<../> . $digest . q</prop.html>);
-        my $euri2 = htescape ($uri2);
-        my ($title_text, $title_lang) = get_title ($digest);
-        print qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>];
-      }
-      print qq[</ul>], get_html_navigation ('../', undef);
-      print qq[</body></html>];
-      exit;
-    } else {
-      print "Content-Type: text/html; charset=utf-8\n";
-      binmode STDOUT, ':utf8';
-      print "\n";
-      print qq[<!DOCTYPE HTML>
+        my $uri_to_entity = get_map ('editor_to_entity')->{$turi};
+        for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
+          my $uri2 = q<../> . $digest . q</prop.html>;
+          my $euri2 = htescape ($uri2);
+          my ($title_text, $title_lang) = get_title ($digest);
+          $app->http->send_response_body_as_text (qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>]);
+        }
+        $app->http->send_response_body_as_text (qq[</ul>]);
+        $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->close_response_body;
+        return;
+      } else { # no query
+        $app->http->send_response_body_as_text (qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title>List of Editors/Authors</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<link rel=stylesheet href="/schema-style">
 </head>
 <body>
 <h1>List of Editors/Authors</h1>
-<ul>];
+<ul>]);
 
-      my $uri_list = get_map ('editor_to_entity');
-      for (sort {$a cmp $b} keys %$uri_list) {
-        my $euri = htescape ($_);
-        my $uri2 = $dom->create_uri_reference (q<editor.html>);
-        $uri2->uri_query ($_);
-        my $euri2 = htescape ($uri2);
-        print qq[<li><a href="$euri2">$euri</a></li>];
+        my $uri_list = get_map ('editor_to_entity');
+        for (sort {$a cmp $b} keys %$uri_list) {
+          my $euri = htescape ($_);
+          my $uri2 = q<editor.html?> . percent_encode_c $_;
+          my $euri2 = htescape ($uri2);
+          $app->http->send_response_body_as_text (qq[<li><a href="$euri2">$euri</a></li>]);
+        }
+        $app->http->send_response_body_as_text (qq[</ul>]);
+        $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->close_response_body;
+        return;
       }
-      print qq[</ul>], get_html_navigation ('../', undef);
-      print qq[</body></html>];
-      exit;
-    }
-  } elsif ($path[2] eq 'tag.html') {
-    my $query = $cgi->query_string;
-    
-    if (defined $query and length $query) {
-      print "Content-Type: text/html; charset=utf-8\n";
-      binmode STDOUT, ':utf8';
-      print "\n";
-      
-      $query = '?' . $query;
-      my $turi = $dom->create_uri_reference ($query)
-          ->get_iri_reference
-          ->uri_query;
-      $turi =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
-      my $eturi = htescape ($turi);
-      
-      print qq[<!DOCTYPE HTML>
+
+    } elsif ($path->[1] eq 'tag.html') {
+      # /list/tag.html
+      my $query = $app->http->url->{query};
+      $app->http->set_response_header
+          ('Content-Type' => 'text/html; charset=utf-8');
+      if (defined $query and length $query) {
+        my $turi = percent_decode_c $query;
+        my $eturi = htescape ($turi);
+        $app->http->send_response_body_as_text (qq[<!DOCTYPE HTML>
 <html lang=en>
 <head>
 <title>Entries Associated with "$eturi"</title>
-<link rel=stylesheet href="/www/style/html/xhtml">
+<link rel=stylesheet href="/schema-style">
 </head>
 <body>
 <h1>Entries Associated with <q>$eturi</q></h1>
-<ul>];
+<ul>]);
 
-      my $uri_to_entity = get_map ('tag_to_entity')->{$turi};
-      for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
-        my $uri2 = $dom->create_uri_reference
-            (q<../> . $digest . q</prop.html>);
-        my $euri2 = htescape ($uri2);
-        my ($title_text, $title_lang) = get_title ($digest);
-        print qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>];
-      }
-      print qq[</ul>], get_html_navigation ('../', undef);
-      print qq[</body></html>];
-      exit;
-    } else {
-      print "Content-Type: text/html; charset=utf-8\n";
-      binmode STDOUT, ':utf8';
-      print "\n";
-      print qq[<!DOCTYPE HTML>
+        my $uri_to_entity = get_map ('tag_to_entity')->{$turi};
+        for my $digest (sort {$a cmp $b} keys %$uri_to_entity) {
+          my $uri2 = q<../> . $digest . q</prop.html>;
+          my $euri2 = htescape ($uri2);
+          my ($title_text, $title_lang) = get_title ($digest);
+          $app->http->send_response_body_as_text (qq[<li><a href="$euri2" lang="@{[htescape ($title_lang)]}">@{[htescape ($title_text)]}</a></li>]);
+        }
+        $app->http->send_response_body_as_text (qq[</ul>]);
+        $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->close_response_body;
+        return;
+      } else { # no query
+        $app->http->send_response_body_as_text (qq[<!DOCTYPE HTML>
 <html lang=en class=page-tags>
 <head>
 <title>List of Tags</title>
@@ -879,31 +855,44 @@ annotations cannot be shown.</div>
 </head>
 <body>
 <h1>List of Tags</h1>
-<ul>];
+<ul>]);
 
-      my $uri_list = get_map ('tag_to_entity');
-      for (sort {$a cmp $b} keys %$uri_list) {
-        my $euri = htescape ($_);
-        my $uri2 = $dom->create_uri_reference (q<tag.html>);
-        $uri2->uri_query ($_);
-        my $euri2 = htescape ($uri2);
-        print qq[<li><a href="$euri2">$euri</a></li>];
+        my $uri_list = get_map ('tag_to_entity');
+        for (sort {$a cmp $b} keys %$uri_list) {
+          my $euri = htescape ($_);
+          my $uri2 = q<tag.html?> . percent_encode_c $_;
+          my $euri2 = htescape ($uri2);
+          $app->http->send_response_body_as_text (qq[<li><a href="$euri2">$euri</a></li>]);
+        }
+        $app->http->send_response_body_as_text (qq[</ul>]);
+        $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->close_response_body;
+        return;
       }
-      print qq[</ul>], get_html_navigation ('../', undef);
-      print qq[</body></html>];
-      exit;
     }
+
+  } elsif (@$path == 1 and $path->[0] eq 'schema-style') {
+    # /schema-style
+    my $f = file (__FILE__)->dir->file ('schema-style.css');
+    $app->http->set_response_header
+        ('Content-Type' => 'text/css; charset=utf-8');
+    $app->http->set_response_last_modified ($f->stat->mtime);
+    $app->http->send_response_body_as_ref (\scalar $f->slurp);
+    $app->http->close_response_body;
+    return;
+  } elsif (@$path == 1 and $path->[0] eq 'schema-add') {
+    # /schema-add
+    my $f = file (__FILE__)->dir->file ('schema-add.en.html');
+    $app->http->set_response_header
+        ('Content-Type' => 'text/html; charset=utf-8');
+    $app->http->set_response_last_modified ($f->stat->mtime);
+    $app->http->send_response_body_as_ref (\scalar $f->slurp);
+    $app->http->close_response_body;
+    return;
   }
-}
 
-print "Status: 404 Not Found\nContent-Type: text/plain\n\n404";
-exit;
-
-sub percent_decode ($) {
-  return $dom->create_uri_reference ($_[0])
-      ->get_iri_reference
-      ->uri_reference;
-} # percent_decode
+  return $app->throw_error (404);
+} # main
 
 sub htescape ($) {
   my $s = shift;
@@ -1340,59 +1329,21 @@ sub add_entity ($) {
 } # add_entity
 
 sub get_remote_entity ($) {
-  my $request_uri = $dom->create_uri_reference ($_[0]);
-  $request_uri->uri_fragment (undef);
   my $r = {};
-
-    my $uri = $dom->create_uri_reference ($request_uri);
-    unless ({
-             ftp => 1,
-             http => 1,
-             https => 1,
-            }->{lc $uri->uri_scheme}) {
-      return {uri => $request_uri->uri_reference,
-              request_uri => $request_uri->uri_reference,
-              error_status_text => 'URI scheme not allowed'};
-    }
-
-    require Message::Util::HostPermit;
-    my $host_permit = new Message::Util::HostPermit;
-    $host_permit->add_rule (<<EOH);
-Allow host=suika port=80
-Deny host=suika
-Allow host=suika.fam.cx port=80
-Deny host=suika.fam.cx
-Deny host=localhost
-Deny host=*.localdomain
-Deny ipv4=0.0.0.0/8
-Deny ipv4=10.0.0.0/8
-Deny ipv4=127.0.0.0/8
-Deny ipv4=169.254.0.0/16
-Deny ipv4=172.0.0.0/11
-Deny ipv4=192.0.2.0/24
-Deny ipv4=192.88.99.0/24
-Deny ipv4=192.168.0.0/16
-Deny ipv4=198.18.0.0/15
-Deny ipv4=224.0.0.0/4
-Deny ipv4=255.255.255.255/32
-Deny ipv6=0::0/0
-Allow host=*
-EOH
-    unless ($host_permit->check ($uri->uri_host, $uri->uri_port || 80)) {
-      return {uri => $request_uri->uri_reference,
-              request_uri => $request_uri->uri_reference,
-              error_status_text => 'Connection to the host is forbidden'};
-    }
+  my $request_uri = url_to_canon_url $_[0], 'about:blank';
+  unless ($request_uri =~ m{^(?:https?|ftp):}) {
+    return {uri => $request_uri,
+            request_uri => $request_uri,
+            error_status_text => 'URI scheme not allowed'};
+  }
 
     require LWP::UserAgent;
     my $ua = WDCC::LWPUA->new (timeout => 30);
-    $ua->{wdcc_dom} = $dom;
-    $ua->{wdcc_host_permit} = $host_permit;
     $ua->agent ('Mozilla'); ## TODO: for now.
     $ua->parse_head (0);
     $ua->protocols_allowed ([qw/ftp http https/]);
     #$ua->max_size (1000_000);
-    my $req = HTTP::Request->new (GET => $request_uri->uri_reference);
+    my $req = HTTP::Request->new (GET => $request_uri);
     my $res = $ua->request ($req);
     ## TODO: 401 sets |is_success| true.
     if ($res->is_success) {
@@ -1413,7 +1364,7 @@ EOH
       $r->{s} = ''.$res->content;
     } else {
       $r->{uri} = $res->request->uri;
-      $r->{request_uri} = $request_uri->uri_reference;
+      $r->{request_uri} = $request_uri;
       $r->{error_status_text} = $res->status_line;
     }
 
@@ -1438,14 +1389,6 @@ sub redirect_ok {
 
   my $uris = $_[1]->header ('Location');
   return 0 unless $uris;
-  my $uri = $ua->{wdcc_dom}->create_uri_reference ($uris);
-  unless ({
-           http => 1,
-          }->{lc $uri->uri_scheme}) {
-    return 0;
-  }
-  unless ($ua->{wdcc_host_permit}->check ($uri->uri_host, $uri->uri_port || 80)) {
-    return 0;
-  }
+  return 0 unless $uris =~ m{^(?:https|ftp):}i;
   return 1;
 } # redirect_ok

@@ -1,0 +1,6 @@
+- "../../modules/twiggy-packed" tests
+- "../../modules/charclass" tests test build
+- "../../modules/web-url" tests test build
+- "../../modules/web-encodings" tests test build
+- "../../modules/wanage" tests test build datetime mp
+- "../../modules/ooutils" tests classdiamondgenerator classregistry objectcachesmethod operationresponse

@@ -1,0 +1,3 @@
+@perl
+@prove
+@plackup=perl modules/twiggy-packed/script/plackup
