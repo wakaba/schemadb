@@ -646,7 +646,7 @@ annotations cannot be shown.</div>
         return $app->send_error (400, reason_phrase => 'No |uri|');
       }
     } else { # GET
-      return $app->send_redirect ('/list/uri.html');
+      return $app->send_redirect ('/list/tag.html');
     }
 
   } elsif (@$path == 2 and $path->[0] eq 'list') {
