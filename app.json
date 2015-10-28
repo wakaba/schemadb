@@ -1,0 +1,7 @@
+{
+  "name": "schemadb",
+  "website": "https://github.com/wakaba/schemadb",
+  "buildpacks": [
+    {"url": "https://github.com/wakaba/heroku-buildpack-perl-pmbp"}
+  ]
+}

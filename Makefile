@@ -29,6 +29,17 @@ pmbp-update: git-submodules pmbp-upgrade
 pmbp-install: pmbp-upgrade
 	perl local/bin/pmbp.pl $(PMBP_OPTIONS) --install
 
+create-commit-for-heroku:
+	git remote rm origin
+	rm -fr deps/pmtar/.git deps/pmpp/.git modules/*/.git
+	git add -f deps/pmtar/* #deps/pmpp/*
+	#rm -fr ./t_deps/modules
+	#git rm -r t_deps/modules
+	git rm .gitmodules
+	git rm modules/* --cached
+	git add -f modules/*/*
+	git commit -m "for heroku"
+
 ## ------ Tests ------
 
 PROVE = ./prove
