@@ -31,6 +31,9 @@ sub psgi_app () {
         $app->http->client_ip_addr->as_text,
         $app->http->get_request_header ('User-Agent') // '';
 
+    $app->http->set_response_header
+        ('Strict-Transport-Security' => 'max-age=10886400; includeSubDomains; preload');
+
     return $http->send_response (onready => sub {
       $app->execute (sub {
         return $app->throw_error (405, reason_phrase => 'Read-only mode')

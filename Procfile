@@ -1,1 +1,1 @@
-web: ./plackup -p $PORT -s Twiggy::Prefork bin/server.psgi
+web: (make deps-data &); ./plackup -p $PORT -s Twiggy::Prefork bin/server.psgi
