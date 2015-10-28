@@ -33,6 +33,9 @@ sub psgi_app () {
 
     return $http->send_response (onready => sub {
       $app->execute (sub {
+        return $app->throw_error (405, reason_phrase => 'Read-only mode')
+            if $ENV{SCHEMADB_READ_ONLY} and
+               not $app->http->request_method eq 'GET';
         return __PACKAGE__->main ($app);
       });
     });
