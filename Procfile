@@ -1,1 +1,1 @@
-web: (make deps-data &); ./plackup -p $PORT -s Twiggy::Prefork bin/server.psgi
+web: (make deps-data &); SCHEMADB_READ_ONLY=1 ./plackup -p $PORT -s Twiggy::Prefork bin/server.psgi
