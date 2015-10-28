@@ -12,7 +12,13 @@ updatenightly: local/bin/pmbp.pl
 
 ## ------ Setup ------
 
-deps: git-submodules pmbp-install
+deps: always
+	true # dummy for make -q
+ifdef PMBP_HEROKU_BUILDPACK
+else
+	$(MAKE) git-submodules
+endif
+	$(MAKE) pmbp-install
 
 git-submodules:
 	$(GIT) submodule update --init
@@ -50,3 +56,5 @@ test-deps: deps
 
 test-main:
 	$(PROVE) t/*.t
+
+always:
