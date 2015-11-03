@@ -14,6 +14,17 @@ my $data_directory_back = '../';
 my $map_directory = $data_directory;
 my $lock_file_name = $data_directory . '.lock';
 
+my $Footer = q{
+<script>
+(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+(i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+})(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+ga('create', 'UA-39820773-4', 'manakai.github.io');
+ga('send', 'pageview');
+</script>
+};
+
 sub resolve_url ($$) {
   my $base = defined $_[1] ? url_to_canon_url $_[1], 'about:blank' : 'about:blank';
   return url_to_canon_url $_[0], $base;
@@ -116,6 +127,7 @@ annotations cannot be shown.</div>
         }
         $app->http->send_response_body_as_text (qq[</code></pre>]);
         $app->http->send_response_body_as_text (scalar get_html_navigation ('../', $path->[0]));
+        $app->http->send_response_body_as_text ($Footer);
         $app->http->close_response_body;
         return;
       }
@@ -316,6 +328,7 @@ annotations cannot be shown.</div>
         }
 
         $app->http->send_response_body_as_text (scalar get_html_navigation ('../', $path->[0]));
+        $app->http->send_response_body_as_text ($Footer);
         $app->http->close_response_body;
         return;
       }
@@ -325,6 +338,7 @@ annotations cannot be shown.</div>
           ('Content-Type' => 'text/html; charset=utf-8');
       my $f = file (__FILE__)->dir->file ('prop-edit.en.html');
       $app->http->send_response_body_as_ref (\scalar $f->slurp);
+      $app->http->send_response_body_as_text ($Footer);
       $app->http->close_response_body;
       return;
     } elsif ($path->[1] eq 'expand') {
@@ -360,6 +374,7 @@ annotations cannot be shown.</div>
             }
             $app->http->send_response_body_as_text (qq[</ul>]);
             set_prop_hash ($path->[0], $prop);
+            $app->http->send_response_body_as_text ($Footer);
             $app->http->close_response_body;
             commit_changes ();
             return;
@@ -565,6 +580,7 @@ annotations cannot be shown.</div>
       <nav>[<a href="../../$edigest_old/diff/$edigest_new.html"
           >Reverse</a>]</nav>]);
       $app->http->send_response_body_as_text (scalar get_html_navigation ('../../', $path->[0]));
+      $app->http->send_response_body_as_text ($Footer);
       $app->http->close_response_body;
       return;
     } elsif ($path->[1] eq 'diff-sync' and $path->[2] =~ /\A[0-9a-f]+\z/) {
@@ -712,6 +728,7 @@ annotations cannot be shown.</div>
       $app->http->send_response_body_as_text (qq[</ul>]);
       
       $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+      $app->http->send_response_body_as_text ($Footer);
       $app->http->send_response_body_as_text (qq[</body></html>]);
       $app->http->close_response_body;
       return;
@@ -743,6 +760,7 @@ annotations cannot be shown.</div>
         }
         $app->http->send_response_body_as_text (qq[</ul>]);
         $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->send_response_body_as_text ($Footer);
         $app->http->send_response_body_as_text (qq[</body></html>]);
         $app->http->close_response_body;
         return;
@@ -766,6 +784,7 @@ annotations cannot be shown.</div>
         }
         $app->http->send_response_body_as_text (qq[</ul>]);
         $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->send_response_body_as_text ($Footer);
         $app->http->close_response_body;
         return;
       }
@@ -797,6 +816,7 @@ annotations cannot be shown.</div>
         }
         $app->http->send_response_body_as_text (qq[</ul>]);
         $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->send_response_body_as_text ($Footer);
         $app->http->close_response_body;
         return;
       } else { # no query
@@ -819,6 +839,7 @@ annotations cannot be shown.</div>
         }
         $app->http->send_response_body_as_text (qq[</ul>]);
         $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->send_response_body_as_text ($Footer);
         $app->http->close_response_body;
         return;
       }
@@ -850,6 +871,7 @@ annotations cannot be shown.</div>
         }
         $app->http->send_response_body_as_text (qq[</ul>]);
         $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->send_response_body_as_text ($Footer);
         $app->http->close_response_body;
         return;
       } else { # no query
@@ -872,6 +894,7 @@ annotations cannot be shown.</div>
         }
         $app->http->send_response_body_as_text (qq[</ul>]);
         $app->http->send_response_body_as_text (scalar get_html_navigation ('../', undef));
+        $app->http->send_response_body_as_text ($Footer);
         $app->http->close_response_body;
         return;
       }
