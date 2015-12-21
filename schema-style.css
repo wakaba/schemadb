@@ -1,5 +1,4 @@
-@import 'https://suikaweb.herokuapp.com/www/style/html/xhtml.css';
-@import 'http://suika.suikawiki.org/www/style/html/xhtml.css';
+@import 'https://suika.suikawiki.org/www/style/html/xhtml.css';
 
   pre {
     counter-reset: line;
@@ -40,7 +39,7 @@
     width: 20em;
     min-width: 5em;
     max-width: 70%;
-    -moz-binding: url(http://suika.fam.cx/www/style/ui/drag.xbl#simple-drag);
+    -moz-binding: url(https://suika.suikawiki.org/www/style/ui/drag.xbl#simple-drag);
   }
   .sa-line-panel-close {
     display: block;
