@@ -1,7 +1,7 @@
 Archive::Zip~1.56
 Test::MockModule~0.11
 Pod::Usage~1.67
-Pod::Text~4.03
+Pod::Text~4.04
 Storable~2.51
 JSON::XS~3.01
 Test::NoWarnings~1.04
