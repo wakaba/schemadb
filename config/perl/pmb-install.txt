@@ -7,7 +7,7 @@ JSON::XS~3.01
 Test::NoWarnings~1.04
 Encode~2.78
 CPAN::Meta~2.150005
-Module::Build~0.4214
+Module::Build~0.4216
 Time::Local~1.2300
 CGI::Carp~4.25
 Try::Tiny~0.24
@@ -40,6 +40,7 @@ version~0.9912
 Test::Tester~0.114
 Time::HiRes~1.9728
 CPAN::Meta::YAML~0.018
+TAP::Harness~3.36
 Exporter~5.72
 Carp~1.38
 Proc::Wait3~0.05
