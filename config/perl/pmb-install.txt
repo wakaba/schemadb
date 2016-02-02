@@ -1,7 +1,7 @@
 Archive::Zip~1.56
 Test::MockModule~0.11
 Pod::Usage~1.68
-Pod::Text~4.05
+Pod::Text~4.06
 Storable~2.51
 JSON::XS~3.01
 Test::NoWarnings~1.04
@@ -11,7 +11,7 @@ Module::Build~0.4216
 Time::Local~1.2300
 CGI::Carp~4.25
 Try::Tiny~0.24
-AnyEvent~7.11
+AnyEvent~7.12
 parent~0.234
 Exporter::Lite~0.08
 Test::Class~0.50
