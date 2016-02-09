@@ -25,7 +25,7 @@ Path::Class~0.35
 common::sense~3.74
 Unicode::Stringprep~1.105
 Module::Metadata~1.000027
-Scalar::Util~1.42
+Scalar::Util~1.43
 Types::Serialiser~1.0
 IO::Handle~1.28
 Module::Runtime~0.014
