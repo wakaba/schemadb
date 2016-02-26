@@ -21,7 +21,7 @@ Sub::Identify~0.12
 Test::More~1.001014
 CPAN::Meta::Requirements~2.140
 File::Temp~0.2304
-Path::Class~0.35
+Path::Class~0.36
 common::sense~3.74
 Unicode::Stringprep~1.105
 Module::Metadata~1.000027
@@ -36,7 +36,7 @@ MRO::Compat~0.12
 Perl::OSType~1.009
 ExtUtils::CBuilder~0.280224
 Parse::CPAN::Meta~1.4417
-version~0.9912
+version~0.9914
 Test::Tester~0.114
 Time::HiRes~1.9728
 CPAN::Meta::YAML~0.018
