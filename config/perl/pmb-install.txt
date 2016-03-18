@@ -20,7 +20,7 @@ File::Temp~0.2304
 Path::Class~0.36
 Unicode::Stringprep~1.105
 Module::Metadata~1.000027
-Scalar::Util~1.43
+Scalar::Util~1.44
 IO::Handle~1.28
 Unicode::Normalize~1.25
 HTML::Entities~3.69
