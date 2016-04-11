@@ -4,7 +4,7 @@ Archive::Zip~1.57
 Pod::Text~4.07
 Storable~2.51
 Test::NoWarnings~1.04
-Encode~2.83
+Encode~2.84
 CPAN::Meta~2.150005
 Module::Build~0.4216
 Time::Local~1.2300
