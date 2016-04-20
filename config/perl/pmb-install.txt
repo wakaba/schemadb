@@ -13,7 +13,7 @@ AnyEvent~7.12
 parent~0.234
 Exporter::Lite~0.08
 ExtUtils::ParseXS~3.30
-ExtUtils::MakeMaker~7.10
+ExtUtils::MakeMaker~7.12
 Sub::Identify~0.12
 CPAN::Meta::Requirements~2.140
 File::Temp~0.2304
