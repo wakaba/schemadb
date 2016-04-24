@@ -13,7 +13,7 @@ AnyEvent~7.12
 parent~0.234
 Exporter::Lite~0.08
 ExtUtils::ParseXS~3.30
-ExtUtils::MakeMaker~7.12
+ExtUtils::MakeMaker~7.14
 Sub::Identify~0.12
 CPAN::Meta::Requirements~2.140
 File::Temp~0.2304
@@ -30,12 +30,12 @@ ExtUtils::CBuilder~0.280224
 Parse::CPAN::Meta~1.4417
 version~0.9916
 Test::Tester~0.114
-Time::HiRes~1.9732
+Time::HiRes~1.9733
 CPAN::Meta::YAML~0.018
 TAP::Harness~3.36
 Exporter~5.72
 Carp~1.38
-JSON::PP~2.27300
+JSON::PP~2.27400
 Proc::Wait3~0.05
 MIME::Base64~3.15
 HTML::Tagset~3.20
