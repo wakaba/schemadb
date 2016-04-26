@@ -6,7 +6,7 @@ Storable~2.51
 Test::NoWarnings~1.04
 Encode~2.84
 CPAN::Meta~2.150005
-Module::Build~0.4216
+Module::Build~0.4218
 Time::Local~1.2300
 CGI::Carp~4.28
 AnyEvent~7.12
