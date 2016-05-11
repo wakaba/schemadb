@@ -29,7 +29,7 @@ Algorithm::Diff~1.1903
 ExtUtils::CBuilder~0.280224
 Parse::CPAN::Meta~1.4417
 version~0.9916
-Test::Tester~0.114
+Test::Tester~1.302015
 Time::HiRes~1.9733
 CPAN::Meta::YAML~0.018
 TAP::Harness~3.36
