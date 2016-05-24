@@ -1,6 +1,6 @@
 Archive::Zip~1.57
 Test::MockModule~0.11
-Pod::Usage~1.68
+Pod::Usage~1.69
 Pod::Text~4.07
 Storable~2.51
 Test::NoWarnings~1.04
@@ -13,7 +13,7 @@ AnyEvent~7.12
 parent~0.234
 Exporter::Lite~0.08
 ExtUtils::ParseXS~3.30
-ExtUtils::MakeMaker~7.16
+ExtUtils::MakeMaker~7.18
 Sub::Identify~0.12
 CPAN::Meta::Requirements~2.140
 File::Temp~0.2304
