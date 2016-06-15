@@ -8,7 +8,7 @@ Encode~2.84
 CPAN::Meta~2.150005
 Time::Local~1.2300
 Module::Build~0.4218
-CGI::Carp~4.30
+CGI::Carp~4.31
 Test::Deep~1.120
 AnyEvent~7.12
 parent~0.234
