@@ -1,6 +1,6 @@
 Algorithm::Diff~1.1903
 AnyEvent~7.12
-Archive::Zip~1.57
+Archive::Zip~1.58
 CGI::Carp~4.32
 CPAN::Meta~2.150005
 CPAN::Meta::Requirements~2.140
