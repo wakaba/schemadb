@@ -17,7 +17,7 @@ Proc::Wait3~0.05
 Scalar::Util~1.45
 Storable~2.51
 Test::NoWarnings~1.04
-Test::Tester~1.302052
+Test::Tester~1.302056
 Time::HiRes~1.9739
 Time::Local~1.24
 Unicode::Stringprep~1.105
