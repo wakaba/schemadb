@@ -1,7 +1,7 @@
 Algorithm::Diff~1.1903
 AnyEvent~7.13
 Archive::Zip~1.59
-CGI::Carp~4.33
+CGI::Carp~4.35
 Carp~1.38
 Encode~2.86
 Exporter::Lite~0.08
@@ -18,4 +18,4 @@ Scalar::Util~1.46
 Storable~2.51
 Time::HiRes~1.9740
 Time::Local~1.24
-parent~0.234
+parent~0.236
