@@ -11,11 +11,11 @@ HTML::Tagset~3.20
 IO::Handle~1.28
 MIME::Base64~3.15
 Path::Class~0.37
-Pod::Text~4.09
+Pod::Text~4.10
 Pod::Usage~1.69
 Proc::Wait3~0.05
 Scalar::Util~1.49
 Storable~2.51
-Time::HiRes~1.9749
+Time::HiRes~1.9750
 Time::Local~1.25
 parent~0.236
