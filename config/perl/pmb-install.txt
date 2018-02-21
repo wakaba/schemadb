@@ -3,7 +3,7 @@ AnyEvent~7.14
 Archive::Zip~1.60
 CGI::Carp~4.38
 Carp~1.38
-Encode~2.96
+Encode~2.97
 Exporter::Lite~0.08
 File::Temp~0.2304
 HTML::Entities~3.69
@@ -14,7 +14,7 @@ Path::Class~0.37
 Pod::Text~4.10
 Pod::Usage~1.69
 Proc::Wait3~0.05
-Scalar::Util~1.49
+Scalar::Util~1.50
 Storable~2.51
 Time::HiRes~1.9754
 Time::Local~1.25
