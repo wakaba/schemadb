@@ -17,5 +17,5 @@ Proc::Wait3~0.05
 Scalar::Util~1.50
 Storable~3.11
 Time::HiRes~1.9758
-Time::Local~1.25
+Time::Local~1.27
 parent~0.236
