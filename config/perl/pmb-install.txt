@@ -15,7 +15,7 @@ Pod::Text~4.11
 Pod::Usage~1.69
 Proc::Wait3~0.05
 Scalar::Util~1.50
-Storable~3.11
+Storable~3.15
 Time::HiRes~1.9760
 Time::Local~1.28
 parent~0.237
