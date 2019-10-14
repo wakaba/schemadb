@@ -1,6 +1,6 @@
 Algorithm::Diff~1.1903
-AnyEvent~7.16
-Archive::Zip~1.64
+AnyEvent~7.17
+Archive::Zip~1.67
 CGI::Carp~4.44
 Carp~1.50
 Encode~3.01
@@ -14,7 +14,7 @@ Path::Class~0.37
 Pod::Text~4.12
 Pod::Usage~1.69
 Proc::Wait3~0.05
-Scalar::Util~1.50
+Scalar::Util~1.52
 Storable~3.15
 Time::HiRes~1.9760
 Time::Local~1.28
