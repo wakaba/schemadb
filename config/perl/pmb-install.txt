@@ -12,7 +12,7 @@ IO::Handle~1.42
 MIME::Base64~3.15
 Path::Class~0.37
 Pod::Text~4.14
-Pod::Usage~1.69
+Pod::Usage~1.70
 Proc::Wait3~0.05
 Scalar::Util~1.54
 Storable~3.15
