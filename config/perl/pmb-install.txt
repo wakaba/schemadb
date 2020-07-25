@@ -3,7 +3,7 @@ AnyEvent~7.17
 Archive::Zip~1.68
 CGI::Carp~4.50
 Carp~1.50
-Encode~3.06
+Encode~3.07
 Exporter::Lite~0.08
 File::Temp~0.2309
 HTML::Entities~3.69
