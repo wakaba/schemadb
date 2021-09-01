@@ -22,7 +22,7 @@ Pod::Text~4.14
 Pod::Usage~2.01
 Proc::Wait3~0.05
 Scalar::Util~1.56
-Storable~3.15
+Storable~3.25
 Time::HiRes~1.9764
 Time::Local~1.30
 Time::Zone~2.24
