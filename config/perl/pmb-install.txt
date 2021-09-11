@@ -26,5 +26,5 @@ Storable~3.25
 Time::HiRes~1.9764
 Time::Local~1.30
 Time::Zone~2.24
-URI~5.09
+URI::URL~5.09
 parent~0.238
