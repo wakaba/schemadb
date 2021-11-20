@@ -10,7 +10,7 @@ File::Temp~0.2311
 HTML::Entities~3.76
 HTML::Tagset~3.20
 HTTP::Date~6.05
-HTTP::Headers~6.33
+HTTP::Headers~6.35
 IO::HTML~1.004
 IO::Handle~1.48
 LWP::MediaTypes~6.04
