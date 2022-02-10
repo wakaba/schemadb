@@ -1,7 +1,7 @@
 Algorithm::Diff~1.201
 AnyEvent~7.17
 Archive::Zip~1.68
-CGI::Carp~4.53
+CGI::Carp~4.54
 Carp~1.50
 Encode~3.16
 Encode::Locale~1.05
