@@ -20,6 +20,7 @@ else
 	$(MAKE) git-submodules
 endif
 	$(MAKE) pmbp-install
+	$(MAKE) deps-data
 
 deps-circleci: deps
 
