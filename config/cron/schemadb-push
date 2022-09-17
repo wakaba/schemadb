@@ -1,2 +1,0 @@
-## schemadb-push @ melon
-40 3 * * * wakaba cd /home/httpd/schemadb/data && git push

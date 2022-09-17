@@ -1,14 +1,20 @@
 {
   "circleci": {
-    "pmbp": 1,
-    "heroku": 1,
-    "merger": 1,
+    "build": ["make deps-circleci"],
+    "docker-build": "quay.io/manakai/tests-web:schemadb",
+    "context": "deploy-context-manakai",
+    "build_generated_pmbp": true,
     "gaa": 1,
+    "pmbp": 1,
+    "merger": 1,
     "tests": [
+      "make deps-circleci",
+      
       {"./plackup -p 5114 -t Twiggy::Prefork bin/server.psgi":
          {"background": true}},
       "sleep 10",
       "curl http://localhost:5114"
-    ]
+    ],
+    "make_deploy_branches": ["master"]
   }
 }
