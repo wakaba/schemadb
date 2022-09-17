@@ -12,9 +12,11 @@ return sub {
   my $http = Wanage::HTTP->new_from_psgi_env ($_[0]);
   my $app = Warabe::App->new_from_http ($http);
 
-  return $app->execute (sub {
-    return $app->send_redirect
-        ('https://suika.suikawiki.org/gate/2007/schema/schema' . $app->http->url->{path},
-         status => 301);
+  $http->send_response (onready => sub {
+    return $app->execute (sub {
+      return $app->send_redirect
+          ('https://suika.suikawiki.org/gate/2007/schema/schema' . $app->http->url->{path},
+           status => 301);
+    });
   });
 };
