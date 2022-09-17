@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 use strict;
 use warnings;
+use Wanage::HTTP;
+use Warabe::App;
 
 $SIG{PIPE} = 'IGNORE';
 
