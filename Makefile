@@ -53,7 +53,7 @@ create-commit-for-heroku:
 	git commit -m "for heroku"
 
 deps-data:
-	git clone --depth 1 https://bitbucket.org/wakabatan/schemadb-data.git data
+	-git clone --depth 1 https://bitbucket.org/wakabatan/schemadb-data.git data
 
 ## ------ Tests ------
 

@@ -3,7 +3,7 @@ FROM quay.io/wakaba/docker-perl-app-base
 ADD bin/ /app/bin/
 ADD config/ /app/config/
 ADD modules/ /app/modules/
-ADD data/ /app/dat/
+ADD data/ /app/data/
 ADD Makefile /app/
 ADD *.cgi /app/
 ADD *.html /app/
